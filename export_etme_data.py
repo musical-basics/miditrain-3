@@ -370,12 +370,17 @@ if __name__ == "__main__":
     }
 
     if args.midi_key and args.angle_map and args.break_method:
-        midi_path = midis.get(args.midi_key)
-        if not midi_path:
-            print(f"Unknown midi_key: {args.midi_key}")
-            sys.exit(1)
+        if args.midi_key.endswith('.mid'):
+            midi_path = args.midi_key
+            base_key = os.path.splitext(os.path.basename(args.midi_key))[0]
+        else:
+            midi_path = midis.get(args.midi_key)
+            base_key = args.midi_key
+            if not midi_path:
+                print(f"Unknown midi_key: {args.midi_key}")
+                sys.exit(1)
             
-        out = f"visualizer/public/etme_{args.midi_key}_{args.angle_map}_{args.break_method}"
+        out = f"visualizer/public/etme_{base_key}_{args.angle_map}_{args.break_method}"
         if args.break_method in ('hybrid', 'hybrid_split'):
             out += f"_{args.jaccard}.json"
             export_analysis(midi_path, output_json=out, angle_map=args.angle_map, break_method=args.break_method, jaccard_threshold=args.jaccard)

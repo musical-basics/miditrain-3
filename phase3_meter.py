@@ -506,7 +506,17 @@ class MacroMeterEstimator:
         }
 
         if write_json:
-            out_path = "phase3_grid.json"
+            import os
+            # e.g., visualizer/public/etme_chunk1_dissonance_hybrid.json -> chunk1
+            basename = os.path.basename(self.json_path)
+            if basename.startswith('etme_'):
+                base_key = basename.split('_')[1] # the part after 'etme_'
+            else:
+                base_key = basename.split('.')[0]
+                
+            out_dir = os.path.dirname(self.json_path)
+            out_path = os.path.join(out_dir, f"phase3_grid_{base_key}.json")
+            
             with open(out_path, "w") as f:
                 json.dump(result, f, indent=2)
             print(f"  ✅  Grid written to: {out_path}")

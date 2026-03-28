@@ -83,6 +83,15 @@ export default function ETMEVisualizer() {
   const [engineLogs, setEngineLogs] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  const [isUploading, setIsUploading] = useState(false);
+  const [midiOptions, setMidiOptions] = useState([
+    { label: 'Chunk 1 (Mm. 1-4)', value: 'chunk1' },
+    { label: 'Chunk 2 (Mm. 5-8)', value: 'chunk2' },
+    { label: 'Chunk 3 (Mm. 9-12)', value: 'chunk3' }
+  ]);
+  const [phase3bData, setPhase3bData] = useState(null);
+
+  const fileInputRef = useRef(null);
   const effectiveScaleRef = useRef(0.05);
   const logsEndRef = useRef(null);
 
@@ -129,7 +138,7 @@ export default function ETMEVisualizer() {
       return true;
     };
 
-    setEngineLogs(prev => [...prev, '\n[1/2] Running Phase 1 & 2 (export_etme_data.py)...']);
+    setEngineLogs(prev => [...prev, '\n[1/3] Running Phase 1 & 2 (export_etme_data.py)...']);
     await runScript('export_etme_data.py', [
       '--midi_key', midiFile,
       '--angle_map', angleMap,
@@ -137,38 +146,90 @@ export default function ETMEVisualizer() {
       '--jaccard', jaccardThreshold.toString()
     ]);
 
-    setEngineLogs(prev => [...prev, '\n[2/2] Running Phase 3 (phase3_meter.py)...']);
+    const baseKey = getBaseKey();
+    setEngineLogs(prev => [...prev, '\n[2/3] Running Phase 3A (phase3_meter.py)...']);
     const jsonTarget = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
-      ? `visualizer/public/etme_${midiFile}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
-      : `visualizer/public/etme_${midiFile}_${angleMap}_${breakModel}.json`;
+      ? `visualizer/public/etme_${baseKey}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
+      : `visualizer/public/etme_${baseKey}_${angleMap}_${breakModel}.json`;
     await runScript('phase3_meter.py', [jsonTarget, '--json']);
+
+    setEngineLogs(prev => [...prev, '\n[3/3] Running Phase 3B (phase3b_quantize.py)...']);
+    const gridTarget = `visualizer/public/phase3_grid_${baseKey}.json`;
+    await runScript('phase3b_quantize.py', [jsonTarget, gridTarget]);
 
     setEngineLogs(prev => [...prev, '\n✅ Pipeline Complete! Auto-refreshing visualizer...']);
     setTimeout(() => {
       setIsEngineRunning(false);
       setRefreshTrigger(prev => prev + 1);
     }, 1500);
-  }, [midiFile, angleMap, breakModel, jaccardThreshold]);
+  }, [midiFile, angleMap, breakModel, jaccardThreshold, getBaseKey]);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch('/api/upload-midi', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.filepath) {
+        setMidiFile(data.filepath);
+        setRefreshTrigger(prev => prev + 1);
+      }
+    } catch(err) {
+      console.error(err);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = null;
+    }
+  };
+
+  // Load midi options
+  useEffect(() => {
+    fetch('/api/list-midis')
+      .then(r => r.json())
+      .then(d => { if (d.midis) setMidiOptions(d.midis); })
+      .catch(console.error);
+  }, [refreshTrigger]);
+
+  const getBaseKey = useCallback(() => {
+    if (midiFile && midiFile.startsWith('midis/')) return midiFile.split('/').pop().replace('.mid', '');
+    return midiFile;
+  }, [midiFile]);
 
   // Load data when any selector changes
   useEffect(() => {
-    const file = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
-      ? `etme_${midiFile}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
-      : `etme_${midiFile}_${angleMap}_${breakModel}.json`;
-    fetch(`/${file}?t=${Date.now()}_${refreshTrigger}`)
+    const baseKey = getBaseKey();
+    const etmeFile = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
+      ? `etme_${baseKey}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
+      : `etme_${baseKey}_${angleMap}_${breakModel}.json`;
+      
+    fetch(`/${etmeFile}?t=${Date.now()}_${refreshTrigger}`)
       .then(r => r.json())
       .then(setData)
       .catch(err => console.error('Failed to load data:', err));
-  }, [midiFile, angleMap, breakModel, jaccardThreshold, refreshTrigger]);
+
+    const p3bFile = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
+      ? `phase3b_quantized_${baseKey}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
+      : `phase3b_quantized_${baseKey}_${angleMap}_${breakModel}.json`;
+
+    fetch(`/${p3bFile}?t=${Date.now()}_${refreshTrigger}`)
+      .then(r => { if(r.ok) return r.json(); return null; })
+      .then(setPhase3bData)
+      .catch(() => setPhase3bData(null));
+
+  }, [midiFile, angleMap, breakModel, jaccardThreshold, refreshTrigger, getBaseKey]);
 
   // Load Phase 3A grid whenever the chunk changes
   useEffect(() => {
-    const gridFile = `phase3_grid_${midiFile}.json`;
+    const baseKey = getBaseKey();
+    const gridFile = `phase3_grid_${baseKey}.json`;
     fetch(`/${gridFile}?t=${Date.now()}_${refreshTrigger}`)
       .then(r => r.json())
       .then(setGridData)
       .catch(() => setGridData(null));
-  }, [midiFile, refreshTrigger]);
+  }, [midiFile, refreshTrigger, getBaseKey]);
 
   // Sync scroll between keyboard and canvas
   useEffect(() => {
@@ -316,10 +377,54 @@ export default function ETMEVisualizer() {
     }
 
     // Draw notes
-    for (const n of notes) {
-      const x = n.onset * effectiveScale;
-      const w = Math.max(n.duration * effectiveScale, 2);
-      const y = (PITCH_MAX - n.pitch) * noteHeight;
+    const activeData = (currentView === 'phase3b' && phase3bData) ? phase3bData.notes : notes;
+
+    for (const n of activeData) {
+      let x, w, y;
+      
+      // If Phase 3B is active, and we have valid quantization, render elastically snapped geometry
+      if (currentView === 'phase3b' && n.quantized) {
+        // Find the absolute ms time corresponding to abs_tick_start and abs_tick_end
+        // We can precisely map this back using the barlines array or just show them on the rigid grid layout
+        // Let's use an idealized rigid grid for phase 3B to prove they are quantized.
+        // Or better yet, we can draw them horizontally using an idealized grid layout where each tick is e.g. 100px uniformly!
+        // The PRD mentions bridging the gap between analog continuous and discrete grammar. 
+        // Let's render Phase 3B over the true time to see where they snapped relative to raw coords.
+        
+        // Let's construct a tick -> ms map from barlines just for rendering
+        const barlines = gridData?.barlines || [];
+        const measure_ms = gridData?.measure_ms || 1000;
+        const ticks_per_measure = (gridData?.beats_per_measure || 4) * (gridData?.subdivision || 4);
+        
+        const getMsForTick = (absTick) => {
+          if (!barlines.length) return absTick * (measure_ms / ticks_per_measure);
+          const first_measure = barlines[0].measure;
+          const target_measure = first_measure + Math.floor(absTick / ticks_per_measure);
+          const remainder = absTick % ticks_per_measure;
+          
+          let m_start_ms;
+          const matched_b = barlines.find(b => b.measure === target_measure);
+          if (matched_b) {
+            m_start_ms = matched_b.time_ms;
+          } else {
+            // Extrapolate
+            m_start_ms = barlines[0].time_ms + (target_measure - first_measure) * measure_ms;
+          }
+          const tick_ms = m_start_ms + (remainder * (measure_ms / ticks_per_measure));
+          return tick_ms;
+        };
+
+        const snapped_onset = getMsForTick(n.quantized.abs_tick_start);
+        const snapped_offset = getMsForTick(n.quantized.abs_tick_end);
+        
+        x = snapped_onset * effectiveScale;
+        w = Math.max((snapped_offset - snapped_onset) * effectiveScale, 3);
+        y = (PITCH_MAX - n.pitch) * noteHeight;
+      } else {
+        x = n.onset * effectiveScale;
+        w = Math.max(n.duration * effectiveScale, 2);
+        y = (PITCH_MAX - n.pitch) * noteHeight;
+      }
 
       let fillColor, strokeColor;
 
@@ -350,14 +455,15 @@ export default function ETMEVisualizer() {
           fillColor = `hsla(${h}, ${s}%, ${l}%, 0.8)`;
           strokeColor = `hsla(${h}, ${s}%, ${Math.min(l + 10, 80)}%, 0.9)`;
         }
-      } else if (currentView === 'phase2' || currentView === 'phase3a') {
+      } else if (currentView === 'phase2' || currentView === 'phase3a' || currentView === 'phase3b') {
         const vc = VOICE_COLORS[n.voice_tag] || VOICE_COLORS['Overflow (Chord)'];
-        const alpha = currentView === 'phase3a' ? 0.5 : 0.85;
-        fillColor = hsl(vc.h, vc.s, vc.l, alpha);
-        strokeColor = hsl(vc.h, vc.s, Math.min(vc.l + 15, 80), alpha + 0.1);
-        if (currentView === 'phase2' && (n.voice_tag === 'Voice 1' || n.voice_tag === 'Voice 4')) {
-          ctx.shadowColor = hsl(vc.h, 90, 50, 0.4);
-          ctx.shadowBlur = 5;
+        // Reduce alpha slightly for 3B just to differentiate
+        const alpha = currentView === 'phase3a' ? 0.5 : (currentView === 'phase3b' ? 0.95 : 0.85);
+        fillColor = hsl(vc.h, vc.s, currentView === 'phase3b' ? vc.l + 10 : vc.l, alpha);
+        strokeColor = hsl(vc.h, vc.s, Math.min(vc.l + 25, 80), alpha + 0.1);
+        if ((currentView === 'phase2' || currentView === 'phase3b') && (n.voice_tag === 'Voice 1' || n.voice_tag === 'Voice 4')) {
+          ctx.shadowColor = hsl(vc.h, 90, 50, currentView === 'phase3b' ? 0.7 : 0.4);
+          ctx.shadowBlur = currentView === 'phase3b' ? 8 : 5;
         } else {
           ctx.shadowColor = 'transparent';
           ctx.shadowBlur = 0;
@@ -684,6 +790,7 @@ export default function ETMEVisualizer() {
     { id: 'phase1', label: 'Phase 1 — Harmonic Regimes', color: 'var(--accent-green)' },
     { id: 'phase2', label: 'Phase 2 — Voice Threading', color: 'var(--accent-pink)' },
     { id: 'phase3a', label: 'Phase 3A — Macro-Meter', color: '#ffd640' },
+    { id: 'phase3b', label: 'Phase 3B — Micro-Quantization', color: '#8e24aa' },
   ];
 
   return (
@@ -715,25 +822,45 @@ export default function ETMEVisualizer() {
         <button 
           onClick={runEngine} 
           style={{
-            marginLeft: 'auto', marginRight: '16px', padding: '4px 12px', fontSize: '11px',
+            marginLeft: 'auto', marginRight: '6px', padding: '4px 12px', fontSize: '11px',
             background: '#2e7d32', color: '#fff', border: '1px solid #1b5e20',
             borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
           }}
         >
           ▶ Run Engine
         </button>
+        <div style={{ position: 'relative' }}>
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              marginRight: '16px', padding: '4px 12px', fontSize: '11px',
+              background: '#0277bd', color: '#fff', border: '1px solid #01579b',
+              borderRadius: '4px', cursor: isUploading ? 'not-allowed' : 'pointer', fontWeight: 'bold'
+            }}
+            disabled={isUploading}
+          >
+            {isUploading ? '📤 Uploading...' : '📥 Import MIDI'}
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileUpload} 
+            accept=".mid,.midi" 
+            style={{ display: 'none' }} 
+          />
+        </div>
         <select
           value={midiFile}
           onChange={e => setMidiFile(e.target.value)}
           style={{
-            marginLeft: 'auto', padding: '4px 8px', fontSize: '11px',
+            padding: '4px 8px', fontSize: '11px', maxWidth: '160px',
             background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #333',
             borderRadius: '4px', cursor: 'pointer'
           }}
         >
-          <option value="chunk1">Chunk 1 (Mm. 1-4)</option>
-          <option value="chunk2">Chunk 2 (Mm. 5-8)</option>
-          <option value="chunk3">Chunk 3 (Mm. 9-12)</option>
+          {midiOptions.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
         </select>
         <select
           value={angleMap}
@@ -815,6 +942,13 @@ export default function ETMEVisualizer() {
             Velocity: {tooltip.velocity}<br />
             Onset: {tooltip.onset}ms<br />
             Duration: {tooltip.duration}ms<br />
+            {currentView === 'phase3b' && tooltip.quantized && (
+              <span style={{ color: '#ffb300' }}>
+                <br /><strong>Micro-Quantized:</strong><br />
+                M{tooltip.quantized.measure}.B{tooltip.quantized.beat} (Sub {tooltip.quantized.sub_tick})<br />
+                Abs Ticks: {tooltip.quantized.abs_tick_start} → {tooltip.quantized.abs_tick_end} (Dur: {tooltip.quantized.duration_ticks})<br />
+              </span>
+            )}
             <br />
             <strong>4D Chord Color:</strong><br />
             H: {tooltip.hue}° | S: {tooltip.sat}% | L: {tooltip.lightness}%<br />
