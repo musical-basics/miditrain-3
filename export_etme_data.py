@@ -367,9 +367,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     midis = {
-        'chunk1': 'pathetique_2_test.mid',
-        'chunk2': 'pathetique_test_chunk2.mid',
-        'chunk3': 'pathetique_test_chunk3.mid',
+        'chunk1': 'midis/pathetique_2_test.mid',
+        'chunk2': 'midis/pathetique_test_chunk2.mid',
+        'chunk3': 'midis/pathetique_test_chunk3.mid',
     }
 
     if args.midi_key and args.angle_map and args.break_method:
