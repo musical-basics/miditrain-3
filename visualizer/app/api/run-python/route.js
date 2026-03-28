@@ -14,6 +14,13 @@ export async function POST(request) {
 
     // Resolve the python script relative to the miditrain-3 root (one level above visualizer)
     const pythonScriptPath = path.resolve(process.cwd(), '..', script);
+    const projectRoot = path.resolve(process.cwd(), '..');
+
+    // Use venv python if available, fall back to system python3
+    const venvPython = path.join(projectRoot, '.venv', 'bin', 'python3');
+    const pythonBin = (() => {
+      try { require('fs').accessSync(venvPython); return venvPython; } catch { return 'python3'; }
+    })();
     
     // Create a Transform stream for Server-Sent Events
     const stream = new TransformStream();
@@ -22,8 +29,8 @@ export async function POST(request) {
     const encoder = new TextEncoder();
     
     // We run from the root of miditrain-3 to preserve relative paths like "visualizer/public/..." inside the python script
-    const pyProcess = spawn('python3', [pythonScriptPath, ...args], {
-      cwd: path.resolve(process.cwd(), '..')
+    const pyProcess = spawn(pythonBin, [pythonScriptPath, ...args], {
+      cwd: projectRoot
     });
 
     // Helper to write to SSE stream

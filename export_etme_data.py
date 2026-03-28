@@ -7,6 +7,9 @@ Phase 1 uses the HarmonicRegimeDetector from STS_bootstrapper.py
 """
 import json
 import math
+import os
+import sys
+import argparse
 from symusic import Score
 from particle import Particle
 from harmonic_regime_detector import HarmonicRegimeDetector, SEMITONE_MAP, ANGLE_MAPS, INTERVAL_ANGLES_DISSONANCE
