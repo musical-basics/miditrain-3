@@ -525,8 +525,8 @@ export default function ETMEVisualizer() {
         ctx.fillText(diffLabel, x + 2, y - 10);
       }
     }
-      // Phase 3A: Barline Grid overlay (drawn on top of all other views)
-    if (currentView === 'phase3a' && gridData) {
+      // Phase 3A & 3B: Barline Grid overlay (drawn on top of all other views)
+    if ((currentView === 'phase3a' || currentView === 'phase3b') && gridData) {
       const barlines = gridData.barlines || [];
       const timeSig = gridData.time_signature || '?/?';
       const bpm = gridData.bpm_tactus || '?';
@@ -568,8 +568,8 @@ export default function ETMEVisualizer() {
 
         // Main barline
         ctx.strokeStyle = isSnapped
-          ? 'rgba(255, 210, 60, 0.75)'
-          : 'rgba(255, 210, 60, 0.35)';
+          ? 'rgba(255, 210, 60, 0.5)'
+          : 'rgba(255, 210, 60, 0.2)';
         ctx.lineWidth = isSnapped ? 1.5 : 1;
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, rollH); ctx.stroke();
 
@@ -578,11 +578,17 @@ export default function ETMEVisualizer() {
         ctx.lineWidth = isSnapped ? 2 : 1;
         ctx.beginPath(); ctx.moveTo(x, rollH); ctx.lineTo(x, rollH + 10); ctx.stroke();
 
-        // Measure number label
+        // Measure number label (Bottom)
         ctx.font = `bold ${isSnapped ? 10 : 9}px Inter`;
         ctx.fillStyle = isSnapped ? 'rgba(255, 220, 80, 0.95)' : 'rgba(255, 210, 60, 0.5)';
         ctx.textAlign = 'center';
-        ctx.fillText(`m${b.measure}`, x, rollH + 21);
+        ctx.fillText(`M${b.measure}`, x, rollH + 21);
+        
+        // Measure number label (Top)
+        if (currentView === 'phase3b' || currentView === 'phase3a') {
+          ctx.fillStyle = 'rgba(255, 220, 80, 0.7)';
+          ctx.fillText(`M${b.measure}`, x + 12, 16);
+        }
         ctx.textAlign = 'start';
 
         // Drift annotation
