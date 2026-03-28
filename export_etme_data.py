@@ -354,24 +354,49 @@ def export_analysis(midi_path, output_json="etme_analysis.json", angle_map='diss
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Export ETME Data")
+    parser.add_argument('--midi_key', type=str, help='e.g. chunk1, chunk2, chunk3')
+    parser.add_argument('--angle_map', type=str, help='e.g. dissonance, fifths')
+    parser.add_argument('--break_method', type=str, help='e.g. centroid, histogram, hybrid, hybrid_split')
+    parser.add_argument('--jaccard', type=float, default=0.5, help='Jaccard threshold')
+    
+    args = parser.parse_args()
+
     midis = {
         'chunk1': 'pathetique_2_test.mid',
         'chunk2': 'pathetique_test_chunk2.mid',
         'chunk3': 'pathetique_test_chunk3.mid',
     }
-    angle_maps = ['dissonance', 'fifths']
-    break_methods = ['centroid', 'histogram', 'hybrid', 'hybrid_split']
-    sep = "\n" + "="*50 + "\n"
 
-    for midi_key, midi_path in midis.items():
-        for am in angle_maps:
-            for bm in break_methods:
-                if bm in ('hybrid', 'hybrid_split'):
-                    for jt in [0.3, 0.5, 0.7]:
-                        out = f"visualizer/public/etme_{midi_key}_{am}_{bm}_{jt}.json"
-                        export_analysis(midi_path, output_json=out, angle_map=am, break_method=bm, jaccard_threshold=jt)
+    if args.midi_key and args.angle_map and args.break_method:
+        midi_path = midis.get(args.midi_key)
+        if not midi_path:
+            print(f"Unknown midi_key: {args.midi_key}")
+            sys.exit(1)
+            
+        out = f"visualizer/public/etme_{args.midi_key}_{args.angle_map}_{args.break_method}"
+        if args.break_method in ('hybrid', 'hybrid_split'):
+            out += f"_{args.jaccard}.json"
+            export_analysis(midi_path, output_json=out, angle_map=args.angle_map, break_method=args.break_method, jaccard_threshold=args.jaccard)
+        else:
+            out += ".json"
+            export_analysis(midi_path, output_json=out, angle_map=args.angle_map, break_method=args.break_method)
+    else:
+        # Run all
+        angle_maps = ['dissonance', 'fifths']
+        break_methods = ['centroid', 'histogram', 'hybrid', 'hybrid_split']
+        sep = "\n" + "="*50 + "\n"
+
+        for midi_key, midi_path in midis.items():
+            for am in angle_maps:
+                for bm in break_methods:
+                    if bm in ('hybrid', 'hybrid_split'):
+                        for jt in [0.3, 0.5, 0.7]:
+                            out = f"visualizer/public/etme_{midi_key}_{am}_{bm}_{jt}.json"
+                            export_analysis(midi_path, output_json=out, angle_map=am, break_method=bm, jaccard_threshold=jt)
+                            print(sep)
+                    else:
+                        out = f"visualizer/public/etme_{midi_key}_{am}_{bm}.json"
+                        export_analysis(midi_path, output_json=out, angle_map=am, break_method=bm)
                         print(sep)
-                else:
-                    out = f"visualizer/public/etme_{midi_key}_{am}_{bm}.json"
-                    export_analysis(midi_path, output_json=out, angle_map=am, break_method=bm)
-                    print(sep)

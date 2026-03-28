@@ -79,27 +79,96 @@ export default function ETMEVisualizer() {
   const [vZoom, setVZoom] = useState(10);
   const [tooltip, setTooltip] = useState(null);
 
+  const [isEngineRunning, setIsEngineRunning] = useState(false);
+  const [engineLogs, setEngineLogs] = useState([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
   const effectiveScaleRef = useRef(0.05);
+  const logsEndRef = useRef(null);
+
+  // Auto-scroll logs
+  useEffect(() => {
+    if (logsEndRef.current) logsEndRef.current.scrollIntoView();
+  }, [engineLogs]);
+
+  const runEngine = useCallback(async () => {
+    setIsEngineRunning(true);
+    setEngineLogs([`🚀 Starting ETME Engine Pipeline for ${midiFile} (${angleMap}, ${breakModel}, ${jaccardThreshold})...`]);
+
+    const runScript = async (script, args) => {
+      const resp = await fetch('/api/run-python', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script, args })
+      });
+      if (!resp.body) return false;
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = '';
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop(); // keep remainder
+          for (const part of parts) {
+            const dataMatch = part.match(/data: (.*)/);
+            if (dataMatch) {
+              const msg = JSON.parse(dataMatch[1]);
+              if (msg.text) {
+                setEngineLogs(prev => [...prev, msg.text.trim()]);
+              } else if (msg.type === 'error') {
+                setEngineLogs(prev => [...prev, '❌ ERROR: ' + msg.text]);
+              }
+            }
+          }
+        }
+      }
+      return true;
+    };
+
+    setEngineLogs(prev => [...prev, '\n[1/2] Running Phase 1 & 2 (export_etme_data.py)...']);
+    await runScript('export_etme_data.py', [
+      '--midi_key', midiFile,
+      '--angle_map', angleMap,
+      '--break_method', breakModel,
+      '--jaccard', jaccardThreshold.toString()
+    ]);
+
+    setEngineLogs(prev => [...prev, '\n[2/2] Running Phase 3 (phase3_meter.py)...']);
+    const jsonTarget = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
+      ? `visualizer/public/etme_${midiFile}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
+      : `visualizer/public/etme_${midiFile}_${angleMap}_${breakModel}.json`;
+    await runScript('phase3_meter.py', [jsonTarget, '--json']);
+
+    setEngineLogs(prev => [...prev, '\n✅ Pipeline Complete! Auto-refreshing visualizer...']);
+    setTimeout(() => {
+      setIsEngineRunning(false);
+      setRefreshTrigger(prev => prev + 1);
+    }, 1500);
+  }, [midiFile, angleMap, breakModel, jaccardThreshold]);
 
   // Load data when any selector changes
   useEffect(() => {
     const file = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
       ? `etme_${midiFile}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
       : `etme_${midiFile}_${angleMap}_${breakModel}.json`;
-    fetch(`/${file}?t=${Date.now()}`)
+    fetch(`/${file}?t=${Date.now()}_${refreshTrigger}`)
       .then(r => r.json())
       .then(setData)
       .catch(err => console.error('Failed to load data:', err));
-  }, [midiFile, angleMap, breakModel, jaccardThreshold]);
+  }, [midiFile, angleMap, breakModel, jaccardThreshold, refreshTrigger]);
 
   // Load Phase 3A grid whenever the chunk changes
   useEffect(() => {
     const gridFile = `phase3_grid_${midiFile}.json`;
-    fetch(`/${gridFile}?t=${Date.now()}`)
+    fetch(`/${gridFile}?t=${Date.now()}_${refreshTrigger}`)
       .then(r => r.json())
       .then(setGridData)
       .catch(() => setGridData(null));
-  }, [midiFile]);
+  }, [midiFile, refreshTrigger]);
 
   // Sync scroll between keyboard and canvas
   useEffect(() => {
@@ -643,6 +712,16 @@ export default function ETMEVisualizer() {
             {v.label}
           </button>
         ))}
+        <button 
+          onClick={runEngine} 
+          style={{
+            marginLeft: 'auto', marginRight: '16px', padding: '4px 12px', fontSize: '11px',
+            background: '#2e7d32', color: '#fff', border: '1px solid #1b5e20',
+            borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
+          }}
+        >
+          ▶ Run Engine
+        </button>
         <select
           value={midiFile}
           onChange={e => setMidiFile(e.target.value)}
@@ -744,6 +823,36 @@ export default function ETMEVisualizer() {
             I<sub>d</sub> Score: {tooltip.id_score}<br />
             Tag: {tooltip.voice_tag}
           </div>
+        </div>
+      )}
+
+      {/* ENGINE MODAL */}
+      {isEngineRunning && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          background: 'rgba(0,0,0,0.85)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            background: '#0d0d12', width: '800px', height: '600px',
+            border: '1px solid #333', borderRadius: '8px',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
+          }}>
+            <div style={{ padding: '12px 16px', background: '#111118', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, color: '#e0e0e0', fontSize: '14px' }}>ETME Engine Output</h3>
+              <div className="spinner" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.2)', borderTop: '2px solid #4caf50', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+            </div>
+            <div style={{ padding: '16px', overflowY: 'auto', flex: 1, fontFamily: 'monospace', fontSize: '12px', color: '#a0a0b0', whiteSpace: 'pre-wrap' }}>
+              {engineLogs.map((log, i) => (
+                <div key={i} style={{ marginBottom: '4px' }}>{log}</div>
+              ))}
+              <div ref={logsEndRef} />
+            </div>
+          </div>
+          <style dangerouslySetInnerHTML={{__html: `
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          `}} />
         </div>
       )}
     </>
