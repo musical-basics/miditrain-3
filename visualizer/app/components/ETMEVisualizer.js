@@ -80,6 +80,7 @@ export default function ETMEVisualizer() {
   const [tooltip, setTooltip] = useState(null);
 
   const [isEngineRunning, setIsEngineRunning] = useState(false);
+  const [isEngineDone, setIsEngineDone] = useState(false);
   const [engineLogs, setEngineLogs] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -129,44 +130,65 @@ export default function ETMEVisualizer() {
           buffer = parts.pop(); // keep remainder
           for (const part of parts) {
             const dataMatch = part.match(/data: (.*)/);
+            const eventMatch = part.match(/event: (.*)/);
+            
             if (dataMatch) {
               const msg = JSON.parse(dataMatch[1]);
+              const eventPattern = eventMatch ? eventMatch[1].trim() : '';
+
+              if (eventPattern === 'done') {
+                return msg.code === 0;
+              }
+
               if (msg.text) {
                 setEngineLogs(prev => [...prev, msg.text.trim()]);
-              } else if (msg.type === 'error') {
-                setEngineLogs(prev => [...prev, '❌ ERROR: ' + msg.text]);
+              } else if (msg.type === 'error' || eventPattern === 'error') {
+                setEngineLogs(prev => [...prev, '❌ ERROR: ' + (msg.text || JSON.stringify(msg))]);
               }
             }
           }
         }
       }
-      return true;
+      return false; // if stream ends without 'done' event, assume failure
     };
 
     setEngineLogs(prev => [...prev, '\n[1/3] Running Phase 1 & 2 (export_etme_data.py)...']);
-    await runScript('export_etme_data.py', [
+    const s1 = await runScript('export_etme_data.py', [
       '--midi_key', midiFile,
       '--angle_map', angleMap,
       '--break_method', breakModel,
       '--jaccard', jaccardThreshold.toString()
     ]);
+    if (!s1) {
+      setEngineLogs(prev => [...prev, '\n❌ Pipeline aborted. Please check the logs above.']);
+      setIsEngineDone(true);
+      return;
+    }
 
     const baseKey = getBaseKey();
     setEngineLogs(prev => [...prev, '\n[2/3] Running Phase 3A (phase3_meter.py)...']);
     const jsonTarget = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
       ? `visualizer/public/etme_${baseKey}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
       : `visualizer/public/etme_${baseKey}_${angleMap}_${breakModel}.json`;
-    await runScript('phase3_meter.py', [jsonTarget, '--json']);
+    const s2 = await runScript('phase3_meter.py', [jsonTarget, '--json']);
+    if (!s2) {
+      setEngineLogs(prev => [...prev, '\n❌ Pipeline aborted. Please check the logs above.']);
+      setIsEngineDone(true);
+      return;
+    }
 
     setEngineLogs(prev => [...prev, '\n[3/3] Running Phase 3B (phase3b_quantize.py)...']);
     const gridTarget = `visualizer/public/phase3_grid_${baseKey}.json`;
-    await runScript('phase3b_quantize.py', [jsonTarget, gridTarget]);
+    const s3 = await runScript('phase3b_quantize.py', [jsonTarget, gridTarget]);
+    if (!s3) {
+      setEngineLogs(prev => [...prev, '\n❌ Pipeline aborted. Please check the logs above.']);
+      setIsEngineDone(true);
+      return;
+    }
 
-    setEngineLogs(prev => [...prev, '\n✅ Pipeline Complete! Auto-refreshing visualizer...']);
-    setTimeout(() => {
-      setIsEngineRunning(false);
-      setRefreshTrigger(prev => prev + 1);
-    }, 1500);
+    setEngineLogs(prev => [...prev, '\n✅ Pipeline Complete! You can now dismiss this window.']);
+    setRefreshTrigger(prev => prev + 1);
+    setIsEngineDone(true);
   }, [midiFile, angleMap, breakModel, jaccardThreshold, getBaseKey]);
 
   const handleFileUpload = async (e) => {
@@ -975,7 +997,19 @@ export default function ETMEVisualizer() {
           }}>
             <div style={{ padding: '12px 16px', background: '#111118', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, color: '#e0e0e0', fontSize: '14px' }}>ETME Engine Output</h3>
-              <div className="spinner" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.2)', borderTop: '2px solid #4caf50', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+              {!isEngineDone ? (
+                <div className="spinner" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.2)', borderTop: '2px solid #4caf50', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+              ) : (
+                <button 
+                  onClick={() => setIsEngineRunning(false)}
+                  style={{
+                    background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '4px',
+                    padding: '6px 16px', cursor: 'pointer', fontWeight: 'bold'
+                  }}
+                >
+                  Dismiss / Close
+                </button>
+              )}
             </div>
             <div style={{ padding: '16px', overflowY: 'auto', flex: 1, fontFamily: 'monospace', fontSize: '12px', color: '#a0a0b0', whiteSpace: 'pre-wrap' }}>
               {engineLogs.map((log, i) => (
