@@ -95,6 +95,11 @@ export default function ETMEVisualizer() {
   const effectiveScaleRef = useRef(0.05);
   const logsEndRef = useRef(null);
 
+  const getBaseKey = useCallback(() => {
+    if (midiFile && midiFile.startsWith('midis/')) return midiFile.split('/').pop().replace('.mid', '');
+    return midiFile;
+  }, [midiFile]);
+
   // Auto-scroll logs
   useEffect(() => {
     if (logsEndRef.current) logsEndRef.current.scrollIntoView();
@@ -192,11 +197,6 @@ export default function ETMEVisualizer() {
       .then(d => { if (d.midis) setMidiOptions(d.midis); })
       .catch(console.error);
   }, [refreshTrigger]);
-
-  const getBaseKey = useCallback(() => {
-    if (midiFile && midiFile.startsWith('midis/')) return midiFile.split('/').pop().replace('.mid', '');
-    return midiFile;
-  }, [midiFile]);
 
   // Load data when any selector changes
   useEffect(() => {
