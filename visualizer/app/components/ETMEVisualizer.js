@@ -206,16 +206,16 @@ export default function ETMEVisualizer() {
       : `etme_${baseKey}_${angleMap}_${breakModel}.json`;
       
     fetch(`/${etmeFile}?t=${Date.now()}_${refreshTrigger}`)
-      .then(r => { if (!r.ok) throw new Error('Not found'); return r.json(); })
+      .then(r => { if (!r.ok) return null; return r.json(); })
       .then(setData)
-      .catch(err => { console.error('Failed to load data:', err.message); setData(null); });
+      .catch(() => setData(null));
 
     const p3bFile = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
       ? `phase3b_quantized_${baseKey}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
       : `phase3b_quantized_${baseKey}_${angleMap}_${breakModel}.json`;
 
     fetch(`/${p3bFile}?t=${Date.now()}_${refreshTrigger}`)
-      .then(r => { if (!r.ok) throw new Error('Not found'); return r.json(); })
+      .then(r => { if (!r.ok) return null; return r.json(); })
       .then(setPhase3bData)
       .catch(() => setPhase3bData(null));
 
@@ -226,7 +226,7 @@ export default function ETMEVisualizer() {
     const baseKey = getBaseKey();
     const gridFile = `phase3_grid_${baseKey}.json`;
     fetch(`/${gridFile}?t=${Date.now()}_${refreshTrigger}`)
-      .then(r => { if (!r.ok) throw new Error('Not found'); return r.json(); })
+      .then(r => { if (!r.ok) return null; return r.json(); })
       .then(setGridData)
       .catch(() => setGridData(null));
   }, [midiFile, refreshTrigger, getBaseKey]);
