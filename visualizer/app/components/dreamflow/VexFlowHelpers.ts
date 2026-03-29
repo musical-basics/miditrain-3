@@ -8,7 +8,8 @@ import type { IntermediateNote } from './IntermediateScore'
 
 // ─── Layout Constants ──────────────────────────────────────────────
 
-export const STAVE_WIDTH = 250         // px per measure
+export const MIN_STAVE_WIDTH = 250      // minimum width per measure
+export const MAX_PAGE_WIDTH = 1200      // width before wrapping in paged mode
 export const STAVE_Y_TREBLE = 40      // Y offset for treble stave
 export const STAVE_SPACING = 120      // vertical space between treble and bass
 export const LEFT_MARGIN = 20         // px left margin

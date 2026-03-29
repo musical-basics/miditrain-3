@@ -27,7 +27,7 @@ import {
 } from 'dreamflow'
 import type { IntermediateScore } from './IntermediateScore'
 import {
-    STAVE_WIDTH, STAVE_Y_TREBLE, STAVE_SPACING, LEFT_MARGIN, SYSTEM_HEIGHT,
+    MIN_STAVE_WIDTH, MAX_PAGE_WIDTH, STAVE_Y_TREBLE, STAVE_SPACING, LEFT_MARGIN, SYSTEM_HEIGHT,
     createStaveNote, isBeamable, addArticulation, detectHeuristicTuplets,
     attachGraceNotes, processSlurs,
     type NoteData, type VexFlowRenderResult, type TupletData, type ActiveSlurs,
@@ -88,16 +88,23 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
         setIsRendered(false)
 
         const measures = score.measures
-        const MAX_ROW_WIDTH = 1200
-        const measuresPerRow = paged ? Math.max(1, Math.floor((MAX_ROW_WIDTH - LEFT_MARGIN) / STAVE_WIDTH)) : measures.length
-        const rowCount = Math.ceil(measures.length / measuresPerRow)
-        
-        const totalWidth = paged ? MAX_ROW_WIDTH : (LEFT_MARGIN + (measures.length * STAVE_WIDTH) + 40)
-        const totalHeight = (rowCount * SYSTEM_HEIGHT) + 40
+        // ── Layout Calculation ──
+        // In the first pass, we determine how many rows we need and the total width.
+        // We'll simulate the layout to find a safe canvas size.
+        const ROW_WIDTH_LIMIT = paged ? MAX_PAGE_WIDTH : 99999
+        let totalWidth = ROW_WIDTH_LIMIT
+        let estimatedRows = 1
+        let currentXForSize = LEFT_MARGIN
+
+        // We'll perform actual coordinate calculations during the render loop.
+        // For sizing purposes, we'll start with a conservative height and resize later if possible,
+        // or just use a sufficiently large height for the grid.
+        const rowCount = paged ? Math.ceil(measures.length / 2) : 1 // rough estimate
+        const initialHeight = (measures.length * SYSTEM_HEIGHT) + 100 // Safe upper bound
 
         // Create SVG renderer
         const renderer = new Renderer(containerRef.current, Renderer.Backends.SVG)
-        renderer.resize(totalWidth, totalHeight)
+        renderer.resize(totalWidth, initialHeight)
         rendererRef.current = renderer
 
         const context = renderer.getContext() as RenderContext
@@ -137,16 +144,31 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
         }
         const tieRequests: TieRequest[] = []
 
+        // Layout tracking
+        let currentX = LEFT_MARGIN
+        let currentRow = 0
+        let maxRowX = 0
+
         // Render each measure
         for (let mIdx = 0; mIdx < measures.length; mIdx++) {
             const measure = measures[mIdx]
             const measureNumber = measure.measureNumber
             
-            const row = paged ? Math.floor(mIdx / measuresPerRow) : 0
-            const col = paged ? (mIdx % measuresPerRow) : mIdx
+            // We'll determine the stave's width after formatting to be perfect,
+            // but for now we'll start with a width and draw later.
+            // Actually VexFlow requires the Stave to have a width UPFRONT.
+            // We'll use a density-aware heuristic: 250px base + 30px per note.
+            let noteCount = 0
+            measure.staves.forEach(s => s.voices.forEach(v => noteCount += v.notes.length))
+            const estimatedWidth = Math.max(MIN_STAVE_WIDTH, (noteCount * 25) / measure.staves.length)
             
-            const x = LEFT_MARGIN + (col * STAVE_WIDTH)
-            const yOffset = row * SYSTEM_HEIGHT
+            if (paged && (currentX + estimatedWidth > MAX_PAGE_WIDTH) && mIdx > 0) {
+                currentX = LEFT_MARGIN
+                currentRow++
+            }
+
+            const x = currentX
+            const yOffset = currentRow * SYSTEM_HEIGHT
 
             // Update running state
             if (measure.keySignature) currentKeySig = measure.keySignature
@@ -154,8 +176,8 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
             if (measure.timeSignatureDenominator) currentTimeSigDen = measure.timeSignatureDenominator
 
             // ── Create staves ──
-            const trebleStave = new Stave(x, STAVE_Y_TREBLE + yOffset, STAVE_WIDTH)
-            const bassStave = new Stave(x, STAVE_Y_TREBLE + STAVE_SPACING + yOffset, STAVE_WIDTH)
+            const trebleStave = new Stave(x, STAVE_Y_TREBLE + yOffset, estimatedWidth)
+            const bassStave = new Stave(x, STAVE_Y_TREBLE + STAVE_SPACING + yOffset, estimatedWidth)
 
             // Clefs
             for (const staff of measure.staves) {
@@ -167,7 +189,7 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
                 }
             }
 
-            if (mIdx === 0 || (paged && col === 0)) {
+            if (mIdx === 0 || (paged && x === LEFT_MARGIN)) {
                 trebleStave.addClef(currentTrebleClef)
                 bassStave.addClef(currentBassClef)
 
@@ -190,7 +212,7 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
                     }
                 }
 
-                if (mIdx === 0 || (paged && col === 0) || measure.timeSignatureNumerator) {
+                if (mIdx === 0 || (paged && x === LEFT_MARGIN) || measure.timeSignatureNumerator) {
                     trebleStave.addTimeSignature(`${currentTimeSigNum}/${currentTimeSigDen}`)
                     bassStave.addTimeSignature(`${currentTimeSigNum}/${currentTimeSigDen}`)
                 }
@@ -200,7 +222,7 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
             bassStave.setContext(context).draw()
 
             // Brace + line connector on first measure or start of row
-            if (mIdx === 0 || (paged && col === 0)) {
+            if (mIdx === 0 || (paged && x === LEFT_MARGIN)) {
                 new StaveConnector(trebleStave, bassStave).setType('brace').setContext(context).draw()
                 new StaveConnector(trebleStave, bassStave).setType('singleLeft').setContext(context).draw()
             }
@@ -460,7 +482,7 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
                 })
 
                 const noteEndX = Math.min(...staves.map(s => {
-                    try { return s.getNoteEndX() } catch { return maxNoteStartX + STAVE_WIDTH - 40 }
+                    try { return s.getNoteEndX() } catch { return maxNoteStartX + estimatedWidth - 40 }
                 }))
                 const availableWidth = noteEndX - maxNoteStartX - 10
                 formatter.format(vfVoices, Math.max(availableWidth, 100))
@@ -523,6 +545,9 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
             coordinateExtractors.forEach(extract => extract())
             beatXMap.set(measureNumber, measureBeatPositions)
             allNoteData.set(measureNumber, measureNoteData)
+            
+            currentX += estimatedWidth
+            if (currentX > maxRowX) maxRowX = currentX
         }
 
         // Draw ties
@@ -590,9 +615,15 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
             if (onRenderComplete) {
                 const systemYMap = {
                     top: STAVE_Y_TREBLE - 20,
-                    height: paged ? totalHeight : SYSTEM_HEIGHT,
-                    rowCount: paged ? rowCount : 1
+                    height: paged ? (currentRow + 1) * SYSTEM_HEIGHT : SYSTEM_HEIGHT,
+                    rowCount: currentRow + 1
                 }
+                
+                // Final Resize to fit content perfectly
+                if (rendererRef.current) {
+                    rendererRef.current.resize(paged ? MAX_PAGE_WIDTH : maxRowX + 100, (currentRow + 1) * SYSTEM_HEIGHT + 100)
+                }
+
                 onRenderComplete({
                     measureXMap,
                     beatXMap,
