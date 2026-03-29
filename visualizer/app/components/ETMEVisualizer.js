@@ -816,9 +816,12 @@ export default function ETMEVisualizer() {
   const views = [
     { id: 'raw', label: 'Piano Roll', color: 'var(--accent-blue)' },
     { id: 'phase1', label: 'Phase 1 — Harmonic Regimes', color: 'var(--accent-green)' },
-    { id: 'phase2', label: 'Phase 2 — Voice Threading', color: 'var(--accent-pink)' },
-    { id: 'phase3a', label: 'Phase 3A — Macro-Meter', color: '#ffd640' },
-    { id: 'phase3b', label: 'Phase 3B — Micro-Quantization', color: '#8e24aa' },
+    { id: 'phase2', label: 'Phase 2 — Voice Threading', color: 'var(--accent-pink)' }
+  ];
+
+  const phase3Views = [
+    { id: 'phase3a', label: '3A — Macro', color: '#ffd640' },
+    { id: 'phase3b', label: '3B — Micro', color: '#8e24aa' }
   ];
 
   return (
@@ -847,6 +850,21 @@ export default function ETMEVisualizer() {
             {v.label}
           </button>
         ))}
+
+        <div className="phase3-group" style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '2px 4px', marginLeft: '8px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a0a0b0', marginLeft: '6px', marginRight: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phase 3:</span>
+          {phase3Views.map(v => (
+            <button
+              key={v.id}
+              className={`view-tab ${currentView === v.id ? 'active' : ''}`}
+              style={{ margin: '2px', padding: '6px 10px' }}
+              onClick={() => setCurrentView(v.id)}
+            >
+              <span className="dot" style={{ background: v.color }} />
+              {v.label}
+            </button>
+          ))}
+        </div>
         <button 
           onClick={runEngine} 
           style={{
