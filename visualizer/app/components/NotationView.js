@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Renderer, Stave, StaveNote, Accidental, Voice, Formatter, StaveConnector } from 'dreamflow';
+import { Renderer, Stave, StaveNote, Accidental, Voice, Formatter, StaveConnector, Dot } from 'dreamflow';
 
 function midiToVexPitches(midi) {
   const notes = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
@@ -39,16 +39,16 @@ export default function NotationView({ phase3cData, gridData }) {
       if (durTicks <= 0) durTicks = 1;
       const ratio = durTicks / ticksPerWholeNote;
       const durs = [
-        { r: 1.0, d: 'w' },
-        { r: 0.75, d: 'h.' },
-        { r: 0.5, d: 'h' },
-        { r: 0.375, d: 'q.' },
-        { r: 0.25, d: 'q' },
-        { r: 0.1875, d: '8.' },
-        { r: 0.125, d: '8' },
-        { r: 0.09375, d: '16.' },
-        { r: 0.0625, d: '16' },
-        { r: 0.03125, d: '32' }
+        { r: 1.0, d: 'w', dots: 0 },
+        { r: 0.75, d: 'h', dots: 1 },
+        { r: 0.5, d: 'h', dots: 0 },
+        { r: 0.375, d: 'q', dots: 1 },
+        { r: 0.25, d: 'q', dots: 0 },
+        { r: 0.1875, d: '8', dots: 1 },
+        { r: 0.125, d: '8', dots: 0 },
+        { r: 0.09375, d: '16', dots: 1 },
+        { r: 0.0625, d: '16', dots: 0 },
+        { r: 0.03125, d: '32', dots: 0 }
       ];
       let closest = durs[0];
       let minDiff = Infinity;
@@ -59,7 +59,7 @@ export default function NotationView({ phase3cData, gridData }) {
           closest = dur;
         }
       }
-      return closest.d;
+      return closest;
     }
 
     const measureKeys = Object.keys(measures).map(Number).sort((a, b) => a - b);
@@ -126,11 +126,16 @@ export default function NotationView({ phase3cData, gridData }) {
           if (t > currentTick) {
             let restDurTicks = t - currentTick;
             const restDur = getVexDuration(restDurTicks);
-            vexNotes.push(new StaveNote({
+            const rNote = new StaveNote({
               keys: clef === 'treble' ? ['b/4'] : ['d/3'],
-              duration: restDur + 'r',
+              duration: restDur.d + 'r',
+              dots: restDur.dots,
               clef: clef
-            }));
+            });
+            if (restDur.dots > 0) {
+              rNote.addModifier(new Dot(), 0);
+            }
+            vexNotes.push(rNote);
             currentTick = t;
           }
           
@@ -152,10 +157,11 @@ export default function NotationView({ phase3cData, gridData }) {
           }
           if (safeDurationTicks < 1) safeDurationTicks = 1;
 
-          const durStr = getVexDuration(safeDurationTicks);
+          const durObj = getVexDuration(safeDurationTicks);
           const staveNote = new StaveNote({
             keys: keys,
-            duration: durStr,
+            duration: durObj.d,
+            dots: durObj.dots,
             clef: clef,
             auto_stem: true
           });
@@ -175,15 +181,10 @@ export default function NotationView({ phase3cData, gridData }) {
              }
           });
           
-          // Helper handling for dotted notes
-          if (durStr.includes('.')) {
-             for (let idx = 0; idx < keys.length; idx++) {
-                // Since dot modifier isn't explicitly imported as easily via generic imports,
-                // dreamflow auto-appends dots if requested, but safest is to add modifier manually if needed.
-                // For simplicity, dreamflow uses staveNote.addDot(idx) if it has a dot helper, but we'll try standard vexflow AddModifier:
-                // Note: we can omit the dot modifier if the visualizer doesn't strictly need it right now, 
-                // but let's assume 'duration: q.' will auto-render without manual intervention in newer VexFlow.
-             }
+          if (durObj.dots > 0) {
+             keys.forEach((_, idx) => {
+                staveNote.addModifier(new Dot(), idx);
+             });
           }
 
           vexNotes.push(staveNote);
@@ -194,11 +195,16 @@ export default function NotationView({ phase3cData, gridData }) {
         if (currentTick < measureAbsStart + ticks_per_measure) {
           let restDurTicks = measureAbsStart + ticks_per_measure - currentTick;
           const restDur = getVexDuration(restDurTicks);
-          vexNotes.push(new StaveNote({
+          const rNote = new StaveNote({
             keys: clef === 'treble' ? ['b/4'] : ['d/3'],
-            duration: restDur + 'r',
+            duration: restDur.d + 'r',
+            dots: restDur.dots,
             clef: clef
-          }));
+          });
+          if (restDur.dots > 0) {
+            rNote.addModifier(new Dot(), 0);
+          }
+          vexNotes.push(rNote);
         }
         
         return vexNotes;
