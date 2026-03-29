@@ -188,13 +188,15 @@ def build_dreamflow_score(notes, ticks_per_measure, beats_per_measure, time_sig_
         measure_obj = {
             "measureNumber": int(m_num) + 1,
             "staves": [
-                {"staffIndex": 0, "clef": "treble", "voices": []},
-                {"staffIndex": 1, "clef": "bass", "voices": []}
+                {"staffIndex": 0, "voices": []},
+                {"staffIndex": 1, "voices": []}
             ]
         }
         
         # Instantiate structural headers identically on the very first measure only
         if m_num == sorted_m_nums[0]:
+            measure_obj["staves"][0]["clef"] = "treble"
+            measure_obj["staves"][1]["clef"] = "bass"
             measure_obj["timeSignatureNumerator"] = time_sig_num
             measure_obj["timeSignatureDenominator"] = time_sig_den
             measure_obj["keySignature"] = best_key
