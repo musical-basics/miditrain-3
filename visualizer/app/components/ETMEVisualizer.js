@@ -289,24 +289,30 @@ export default function ETMEVisualizer() {
   // Render OSMD Phase 3C Data
   useEffect(() => {
     let active = true;
+
     if (currentView === 'phase3c' && phase3cData && osmdContainerRef.current) {
+      // Always destroy and recreate: the container div is conditionally mounted,
+      // so any cached instance points to a detached DOM node after a tab switch.
+      if (osmdInstanceRef.current) {
+        try { osmdInstanceRef.current.clear(); } catch (_) {}
+        osmdInstanceRef.current = null;
+      }
+
       import('opensheetmusicdisplay').then((pkg) => {
-        if (!active) return;
+        if (!active || !osmdContainerRef.current) return;
         const { OpenSheetMusicDisplay } = pkg;
-        
-        if (!osmdInstanceRef.current) {
-          osmdInstanceRef.current = new OpenSheetMusicDisplay(osmdContainerRef.current, {
-            autoResize: true,
-            drawTitle: false,
-          });
-        }
-        
+
+        osmdInstanceRef.current = new OpenSheetMusicDisplay(osmdContainerRef.current, {
+          autoResize: true,
+          drawTitle: false,
+        });
+
         import('../utils/musicXmlBuilder').then(({ buildMusicXml }) => {
-          if (!active) return;
+          if (!active || !osmdInstanceRef.current) return;
           try {
             const xml = buildMusicXml(phase3cData);
             osmdInstanceRef.current.load(xml).then(() => {
-              if (active) osmdInstanceRef.current.render();
+              if (active && osmdInstanceRef.current) osmdInstanceRef.current.render();
             }).catch(err => console.error("OSMD Load Error:", err));
           } catch(e) {
             console.error("XML Builder Error:", e);
@@ -314,7 +320,16 @@ export default function ETMEVisualizer() {
         });
       }).catch(err => console.error("Failed to load OSMD:", err));
     }
-    return () => { active = false; };
+
+    return () => {
+      active = false;
+      // On cleanup (tab switch away), destroy the instance so it's not reused
+      // against a soon-to-be-detached container.
+      if (osmdInstanceRef.current) {
+        try { osmdInstanceRef.current.clear(); } catch (_) {}
+        osmdInstanceRef.current = null;
+      }
+    };
   }, [currentView, phase3cData]);
 
   // Rendering
