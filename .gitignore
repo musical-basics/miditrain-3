@@ -27,6 +27,8 @@ repomix-output.*
 etme_*.json
 visualizer/public/etme_*.json
 visualizer/public/phase3_grid_*.json
+visualizer/public/phase3b_*.json
+visualizer/public/phase3c_*.json
 
 # Backup files
 _backup_files/

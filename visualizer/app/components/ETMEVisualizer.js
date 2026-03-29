@@ -152,7 +152,7 @@ export default function ETMEVisualizer() {
       return false; // if stream ends without 'done' event, assume failure
     };
 
-    setEngineLogs(prev => [...prev, '\n[1/3] Running Phase 1 & 2 (export_etme_data.py)...']);
+    setEngineLogs(prev => [...prev, '\n[1/4] Running Phase 1 & 2 (export_etme_data.py)...']);
     const s1 = await runScript('export_etme_data.py', [
       '--midi_key', midiFile,
       '--angle_map', angleMap,
@@ -166,7 +166,7 @@ export default function ETMEVisualizer() {
     }
 
     const baseKey = getBaseKey();
-    setEngineLogs(prev => [...prev, '\n[2/3] Running Phase 3A (phase3_meter.py)...']);
+    setEngineLogs(prev => [...prev, '\n[2/4] Running Phase 3A (phase3_meter.py)...']);
     const jsonTarget = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
       ? `visualizer/public/etme_${baseKey}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
       : `visualizer/public/etme_${baseKey}_${angleMap}_${breakModel}.json`;
@@ -177,10 +177,21 @@ export default function ETMEVisualizer() {
       return;
     }
 
-    setEngineLogs(prev => [...prev, '\n[3/3] Running Phase 3B (phase3b_quantize.py)...']);
+    setEngineLogs(prev => [...prev, '\n[3/4] Running Phase 3B (phase3b_quantize.py)...']);
     const gridTarget = `visualizer/public/phase3_grid_${baseKey}.json`;
     const s3 = await runScript('phase3b_quantize.py', [jsonTarget, gridTarget]);
     if (!s3) {
+      setEngineLogs(prev => [...prev, '\n❌ Pipeline aborted. Please check the logs above.']);
+      setIsEngineDone(true);
+      return;
+    }
+
+    setEngineLogs(prev => [...prev, '\n[4/4] Running Phase 3C (phase3c_notation.py)...']);
+    const p3cTarget = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
+      ? `visualizer/public/phase3b_quantized_${baseKey}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
+      : `visualizer/public/phase3b_quantized_${baseKey}_${angleMap}_${breakModel}.json`;
+    const s4 = await runScript('phase3c_notation.py', [p3cTarget, gridTarget]);
+    if (!s4) {
       setEngineLogs(prev => [...prev, '\n❌ Pipeline aborted. Please check the logs above.']);
       setIsEngineDone(true);
       return;
