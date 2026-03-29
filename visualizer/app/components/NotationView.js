@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Renderer, Stave, StaveNote, Accidental, Voice, LinearFormatter, StaveConnector } from 'dreamflow';
+import { Renderer, Stave, StaveNote, Accidental, Voice, Formatter, StaveConnector } from 'dreamflow';
 
 function midiToVexPitches(midi) {
   const notes = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
@@ -21,13 +21,19 @@ export default function NotationView({ phase3cData, gridData }) {
     const context = renderer.getContext();
     context.setFont('Arial', 10, '').setBackgroundFillStyle('#ffffff');
     
-    // Safety mapping for time signature
-    const timeSig = gridData?.time_signature || '4/4';
-    const [num, den] = timeSig.split('/').map(Number);
+    // Correct time signature logic based on Phase 3C container values
+    const num = phase3cData.beats_per_measure || 4;
+    const den = phase3cData.denominator || 4;
+    const timeSig = `${num}/${den}`;
     const measureValuesInWholeNotes = num / den;
     
     const { measures, ticks_per_measure } = phase3cData;
     const ticksPerWholeNote = ticks_per_measure / measureValuesInWholeNotes;
+
+    // Zoom-level pixel density (we can just compute how wide a single tick is)
+    // Assuming standard 4/4 measure at 320 ticks could be 320 pixels -> 1 px/tick. 
+    // Let's define pixelsPerTick
+    const pixelsPerTick = 2.0; 
 
     function getVexDuration(durTicks) {
       if (durTicks <= 0) durTicks = 1;
@@ -59,8 +65,9 @@ export default function NotationView({ phase3cData, gridData }) {
     const measureKeys = Object.keys(measures).map(Number).sort((a, b) => a - b);
     const numMeasures = measureKeys.length;
     
-    const measureWidth = 300; 
-    renderer.resize(measureWidth * numMeasures + 150, 400);
+    // Estimate total canvas width based on total ticks
+    const totalTicks = numMeasures * ticks_per_measure;
+    renderer.resize(totalTicks * pixelsPerTick + 200, 400);
 
     let x = 20;
     let yTreble = 50;
@@ -68,7 +75,24 @@ export default function NotationView({ phase3cData, gridData }) {
 
     measureKeys.forEach((m_num, i) => {
       const isFirst = i === 0;
-      const mWidth = isFirst ? measureWidth + 60 : measureWidth;
+      
+      // Calculate start and end offset to find precise ticks for measure content
+      let mMinTick = Number.MAX_SAFE_INTEGER;
+      let mMaxTick = 0;
+      const rhTicks = Object.keys(measures[m_num]['RH'] || {}).map(Number);
+      const lhTicks = Object.keys(measures[m_num]['LH'] || {}).map(Number);
+      const allTicks = [...rhTicks, ...lhTicks];
+      allTicks.forEach(t => { 
+          mMinTick = Math.min(mMinTick, t); 
+          mMaxTick = Math.max(mMaxTick, t);
+      });
+      // Safety bounds if measure is totally empty
+      const measureAbsStart = mMinTick === Number.MAX_SAFE_INTEGER ? m_num * ticks_per_measure : mMinTick - (mMinTick % ticks_per_measure);
+
+      
+      // The Rigid Linear Trick: force the Stave width to strictly equal its duration * pixelsPerTick!
+      const paddingParams = isFirst ? 60 : 0;
+      const mWidth = (ticks_per_measure * pixelsPerTick) + paddingParams;
 
       const staveTreble = new Stave(x, yTreble, mWidth);
       const staveBass = new Stave(x, yBass, mWidth);
@@ -91,13 +115,7 @@ export default function NotationView({ phase3cData, gridData }) {
         line.setContext(context).draw();
       }
 
-      // We determine measure start
-      let mMinTick = Number.MAX_SAFE_INTEGER;
-      const rhTicks = Object.keys(measures[m_num]['RH'] || {}).map(Number);
-      const lhTicks = Object.keys(measures[m_num]['LH'] || {}).map(Number);
-      const allTicks = [...rhTicks, ...lhTicks];
-      allTicks.forEach(t => { mMinTick = Math.min(mMinTick, t); });
-      const measureAbsStart = mMinTick === Number.MAX_SAFE_INTEGER ? 0 : mMinTick - (mMinTick % ticks_per_measure);
+      // Replaced by measureAbsStart above
 
       const processStaff = (staffData, clef) => {
         let tickKeys = Object.keys(staffData).map(Number).sort((a,b) => a - b);
@@ -196,8 +214,10 @@ export default function NotationView({ phase3cData, gridData }) {
         const bassVoice = new Voice({ num_beats: num, beat_value: den }).setStrict(false);
         bassVoice.addTickables(bassNotes);
 
-        const formatter = new LinearFormatter(30); // 30 pixels per quarter note, basically
-        const formatWidth = mWidth - (isFirst ? 80 : 30);
+        const formatter = new Formatter().joinVoices([trebleVoice, bassVoice]);
+        
+        // Target format width is strictly the Stave's drawable width (Stave width minus padding)
+        const formatWidth = mWidth - paddingParams - 20;
         formatter.format([trebleVoice, bassVoice], formatWidth);
 
         trebleVoice.draw(context, staveTreble);
