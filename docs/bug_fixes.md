@@ -47,8 +47,28 @@ Even after introducing Thermodynamic Greedy Auctions, several localized "whack-a
    - *Why it failed*: Melodies dynamically shift into middle registers. When the Top Note dropped to Bb3, the global maxim mathematically punished Voice 1 with a massive 15-point penalty for descending. Voice 1 refused to play the melody, allowing the Alto to steal it.
 
 ### The Final Solution: Symmetrical Repulsion and Topological Walls
-Instead of explicit "if/else" behavior parsing, the engine physics were recalibrated to strictly define the functional existence of boundaries:
+   - Instead of explicit "if/else" behavior parsing, the engine physics were recalibrated to strictly define the functional existence of boundaries:
+   
+   1. **Topological Inversion Walls** (`cost_topology`): Upper strings are now strictly mathematically penalized (`+60.0`) if they attempt a coordinate dive beneath the *actively vibrating frequency* of a lower string. This perfectly clumps heavy Bass block chords into their native Tenor/Bass tracks because upper resting strings are mechanically terrified of diving into the Bass Clef to "help."
+   2. **Infinite Outer Bounds**: The `Soprano` and `Bass` boundaries were entirely stripped of internal `ideal_pitch` gravity rails. Because they represent the literal infinite envelope of the music, they span all ranges natively without penalty. This fixed the Chunk 2 Top-Note Melody steal because Voice 1 was successfully able to drop to `Bb3` without sustaining a 15-point `W_REGISTER` pseudo-penalty. Unison Immunity (`last_pitch != p.pitch`) was explicitly restored to ensure `Tenor` strings operating in the `is_bottom` register don't randomly trigger Bass string infiltration.
+   3. **Soft Pauli Exclusion vs String Inertia**: To organically prompt empty tracks to "wake up" to take inner notes, the mathematical inertia of starting an empty string was dropped to `25.0`, and the Pauli block-chord overlap penalty was calibrated to a Goldilocks `35.0`. This ensures empty inner strings natively wake up to handle thick arpeggios, but correctly offload 5-note overflows into adjacent active tracks rather than shattering the outer structure.
 
-1. **Topological Inversion Walls** (`cost_topology`): Upper strings are now strictly mathematically penalized (`+60.0`) if they attempt a coordinate dive beneath the *actively vibrating frequency* of a lower string. This perfectly clumps heavy Bass block chords into their native Tenor/Bass tracks because upper resting strings are mechanically terrified of diving into the Bass Clef to "help."
-2. **Infinite Outer Bounds**: The `Soprano` and `Bass` boundaries were entirely stripped of internal `ideal_pitch` gravity rails. Because they represent the literal infinite envelope of the music, they span all ranges natively without penalty. This fixed the Chunk 2 Top-Note Melody steal because Voice 1 was successfully able to drop to `Bb3` without sustaining a 15-point `W_REGISTER` pseudo-penalty. Unison Immunity (`last_pitch != p.pitch`) was explicitly restored to ensure `Tenor` strings operating in the `is_bottom` register don't randomly trigger Bass string infiltration.
-3. **Soft Pauli Exclusion vs String Inertia**: To organically prompt empty tracks to "wake up" to take inner notes, the mathematical inertia of starting an empty string was dropped to `25.0`, and the Pauli block-chord overlap penalty was calibrated to a Goldilocks `35.0`. This ensures empty inner strings natively wake up to handle thick arpeggios, but correctly offload 5-note overflows into adjacent active tracks rather than shattering the outer structure.
+## Bug: VexFlow Notation Squeezing / Z-Axis Stacking (Phase 3C)
+**Date:** March 28, 2026
+**Component:** `NotationView.js` (Phase 3C)
+
+### The Issue
+When rendering the Phase 3C Notation Map, all notes in a measure were visually squashed together at `X = 0`, perfectly superimposed on top of each other without stems or flags. Subsequently, the measure expanded only slightly, leaving the remainder of the VexFlow `Stave` completely blank. VexFlow's Formatter was failing to justify the measure to the expected width.
+
+### Failed Fix Attempts
+1. **Upstream LinearFormatter Hack**
+   - *Hypothesis*: The standard VexFlow softmax proportional spacing algorithm was assumed incapable of rigid grid alignments, so a custom `LinearFormatter` was built into the `dreamflow` library to force X-coordinates to `measure_start_tick * pixelsPerTick`.
+   - *Why it failed*: The upstream override violated VexFlow's internal rendering assumptions and still required extreme manual padding maintenance. More importantly, it did not solve the root cause of why the standard `Formatter` was refusing to justify the notes natively.
+
+### The Final Solution: Dotted Note Parsing and Dynamic Tick Scaling
+The issue was actually a combination of two distinct bugs disrupting VexFlow's structural assumptions:
+
+1. **Invalid Duration `ticks=0` Crash**: The raw duration conversion helper (`getVexDuration`) was passing strings like `"q."` for dotted notes directly to the `StaveNote` constructor. VexFlow's modern constructor strictly expects base durations (`"q"`) and fails silently on dotted strings, assigning the note `0` ticks. Because all internal notes advanced the voice by 0 ticks, the Formatter mathematically superimposed them all at Tick 0. 
+   - *Fix*: The parser was rewritten to output a proper struct (`{ duration: 'q', dots: 1 }`). By explicitly assigning the `dots` config to the `StaveNote` and binding the visual `new Dot()` modifier, notes regained their correct temporal footprint.
+2. **Sub-Minimum Stave Width Squeezing**: The DAW-style layout calculates the physical Stave width via `ticks_per_measure * pixelsPerTick`. The `ticks_per_measure` was natively resolving to `16` (1 tick = 1 sixteenth note). With `pixelsPerTick` hardcoded to `2.0`, the entire measure's physical canvas width evaluated to a microscopic `32` pixels. VexFlow's Formatter literally had no room to spread the notes, so it grouped them into a cluster and hid stems to avoid collisions.
+   - *Fix*: The structural scaling was anchored to a constant `80 pixels per quarter note` density by evaluating `pixelsPerTick = 80 / (ticksPerWholeNote / 4)`. This guarantees that regardless of the sub-tick resolution (`16` or `320`), a 4/4 measure always yields a ~`320px` bounding box, allowing the native VexFlow `Formatter` to comfortably justify the notes across the timeline.
