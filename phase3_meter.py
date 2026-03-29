@@ -147,26 +147,40 @@ class MacroMeterEstimator:
 
     def _estimate_measure_length(self, spike_times, tactus_ms, max_time):
         """
-        Autocorrelation of the spike density envelope to find the dominant
+        Autocorrelation of the COHERENT MACRO-DENSITY envelope to find the dominant
         macro-period (measure length) above the tactus level.
 
-        No hardcoded multiples of the tactus — the period is derived entirely
-        from the self-similarity of the spike pattern.
-
-        Returns:
-            measure_ms   : inferred measure length in ms
-            spike_density: list of (t_ms, count) — 50ms-binned spike histogram
-            autocorr     : list of (lag_ms, score) — normalized autocorrelation
+        Phase 3 Coherent Merge:
+        Merges Phase 1 (Harmonic Spikes) with Phase 2 (Thermodynamic Voice Threading).
+        A Phase 1 spike's structural weight is amplified by the mass of Phase 2 notes
+        (especially Voice 4 Bass and Voice 1 Melody) that strike simultaneously.
+        This powerfully filters out passing harmonic chords and amplifies true downbeats.
         """
         BIN_MS = 50
         n_bins = max(2, int(max_time / BIN_MS) + 2)
 
-        # Build density array
-        density = [0] * n_bins
+        # Build coherent density array
+        density = [0.0] * n_bins
         for t in spike_times:
             idx = int(t / BIN_MS)
             if 0 <= idx < n_bins:
-                density[idx] += 1
+                weight = 1.0  # Base weight for a harmonic spike
+
+                # Phase 2 Merge: Find coincident structural notes
+                for n in self.notes:
+                    if abs(n["onset"] - t) <= 50:
+                        # Calculate mass: velocity (0.0-1.0) * duration factor
+                        dur_factor = max(0.5, min(n["duration"] / 1000.0, 2.0))
+                        mass = (n["velocity"] / 127.0) * dur_factor
+
+                        if n["voice_tag"] == "Voice 4":
+                            weight += mass * 3.0  # Bass is the strongest measure anchor
+                        elif n["voice_tag"] == "Voice 1":
+                            weight += mass * 1.5  # Melody provides secondary structural weight
+                        else:
+                            weight += mass * 0.5  # Inner voices contribute lightly
+
+                density[idx] += weight
 
         # Autocorrelate: lags from tactus_ms up to half the total duration
         min_lag_bins = max(1, int(tactus_ms / BIN_MS))
@@ -183,11 +197,9 @@ class MacroMeterEstimator:
             autocorr.append((lag * BIN_MS, score))
 
         if not autocorr:
-            return tactus_ms, density, []
+            return tactus_ms, [{"t_ms": i * BIN_MS, "count": round(density[i], 2)} for i in range(n_bins) if density[i] > 0], []
 
         # Find the dominant period: highest score above tactus.
-        # Ignore the very first bins (they'd just pick up self-similarity at sub-tactus).
-        # We look for the FIRST prominent local maximum.
         scores = [s for _, s in autocorr]
         max_score = max(scores) if scores else 0
         NOISE_FLOOR = max_score * 0.25  # peaks must exceed 25% of global max
@@ -199,11 +211,9 @@ class MacroMeterEstimator:
                 peaks.append((autocorr[i][0], scores[i]))
 
         if not peaks:
-            # Flat autocorrelation — no dominant period found. Use global max.
             best_lag_ms = max(autocorr, key=lambda x: x[1])[0]
         else:
             # Pick the SMALLEST lag peak that has >= 50% of the global maximum
-            # (prefer shorter periods — e.g. 1000ms over 2000ms for 2/4)
             significant = [(lag, s) for lag, s in peaks if s >= max_score * 0.5]
             if significant:
                 best_lag_ms = min(significant, key=lambda x: x[0])[0]
@@ -216,9 +226,9 @@ class MacroMeterEstimator:
             for lag, s in autocorr
         ]
 
-        # Compact density export: only bins with spikes
+        # Compact density export: round floats to 2 decimal places for the JSON payload
         density_export = [
-            {"t_ms": i * BIN_MS, "count": density[i]}
+            {"t_ms": i * BIN_MS, "count": round(density[i], 2)}
             for i in range(n_bins) if density[i] > 0
         ]
 
