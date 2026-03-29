@@ -56,69 +56,107 @@ export function buildMusicXml(phase3cJson) {
       const staffMeasures = measures[m_num][staffKey] || {};
       const ticks = Object.keys(staffMeasures).map(Number).sort((a,b) => a - b);
       
-      let measureAbsStart = -1;
+      let minTick = Number.MAX_SAFE_INTEGER;
+      const rhTicks = Object.keys(measures[m_num]['RH'] || {}).map(Number);
+      const lhTicks = Object.keys(measures[m_num]['LH'] || {}).map(Number);
+      rhTicks.concat(lhTicks).forEach(t => { if (t < minTick) minTick = t; });
       
-      // Attempt to find absolute start tick of the measure based on its notes
-      if (ticks.length > 0) {
-        // e.g., if tick is 34 and ticks_per_measure is 16, start is 32.
-        measureAbsStart = ticks[0] - (ticks[0] % ticks_per_measure);
-      } else {
-        // Find it from any other hand that might have notes
-        const otherHandKey = staffKey === 'RH' ? 'LH' : 'RH';
-        const otherTicks = Object.keys(measures[m_num][otherHandKey] || {}).map(Number).sort((a,b) => a - b);
-        if (otherTicks.length > 0) {
-           measureAbsStart = otherTicks[0] - (otherTicks[0] % ticks_per_measure);
-        }
-      }
+      const measureAbsStart = minTick === Number.MAX_SAFE_INTEGER ? 0 : minTick - (minTick % ticks_per_measure);
+      const expectedMeasureEnd = measureAbsStart + ticks_per_measure;
+
+      // Group notes into voices
+      const voiceBuckets = {};
+      ticks.forEach(tick => {
+        staffMeasures[tick].forEach(note => {
+          let vId = '1';
+          if (staffKey === 'RH' && note.voice_tag === 'Voice 2') vId = '2';
+          if (staffKey === 'LH' && note.voice_tag === 'Voice 4') vId = '2';
+          
+          if (!voiceBuckets[vId]) voiceBuckets[vId] = {};
+          if (!voiceBuckets[vId][tick]) voiceBuckets[vId][tick] = [];
+          voiceBuckets[vId][tick].push(note);
+        });
+      });
       
-      if (measureAbsStart === -1) {
+      const vKeys = Object.keys(voiceBuckets).sort();
+
+      if (vKeys.length === 0) {
         partXml += `      <note>\n`;
         partXml += `        <rest/>\n`;
         partXml += `        <duration>${ticks_per_measure}</duration>\n`;
+        partXml += `        <voice>1</voice>\n`;
         partXml += `      </note>\n`;
       } else {
-        let currentAbsTick = measureAbsStart;
-        
-        ticks.forEach(tick => {
-          if (tick > currentAbsTick) {
-            const restDur = tick - currentAbsTick;
-            partXml += `      <note>\n`;
-            partXml += `        <rest/>\n`;
-            partXml += `        <duration>${restDur}</duration>\n`;
-            partXml += `      </note>\n`;
-            currentAbsTick = tick;
+        vKeys.forEach((vId, vIndex) => {
+          if (vIndex > 0) {
+            // Backup cursor for simultaneous voices
+            partXml += `      <backup>\n`;
+            partXml += `        <duration>${ticks_per_measure}</duration>\n`;
+            partXml += `      </backup>\n`;
           }
           
-          const tickNotes = staffMeasures[tick];
-          // sort notes so highest pitches render better on top?
-          tickNotes.sort((a, b) => b.pitch - a.pitch);
+          let currentAbsTick = measureAbsStart;
+          const voiceTicks = Object.keys(voiceBuckets[vId]).map(Number).sort((a,b) => a - b);
           
-          let maxDur = 0;
-          tickNotes.forEach((note, idx) => {
-            partXml += `      <note>\n`;
-            if (idx > 0) {
-              partXml += `        <chord/>\n`;
+          voiceTicks.forEach(tick => {
+            if (tick > currentAbsTick) {
+              const restDur = tick - currentAbsTick;
+              partXml += `      <note>\n`;
+              partXml += `        <rest/>\n`;
+              partXml += `        <duration>${restDur}</duration>\n`;
+              partXml += `        <voice>${vId}</voice>\n`;
+              partXml += `      </note>\n`;
+              currentAbsTick = tick;
             }
-            partXml += `        <pitch>\n          ${midiToXmlPitch(note.pitch)}\n        </pitch>\n`;
-            partXml += `        <duration>${note.duration_ticks}</duration>\n`;
-            partXml += `      </note>\n`;
             
-            if (note.duration_ticks > maxDur) maxDur = note.duration_ticks;
+            const tickNotes = voiceBuckets[vId][tick];
+            tickNotes.sort((a, b) => b.pitch - a.pitch); // top to bottom rendering priority
+            
+            let maxDur = 0;
+            tickNotes.forEach((note, idx) => {
+              const isGrace = note.duration_ticks <= 0;
+              let safeDuration = 0;
+              
+              if (!isGrace) {
+                safeDuration = note.duration_ticks;
+                // Truncate overlapping barline durations strictly for OSMD formatting
+                if (currentAbsTick + safeDuration > expectedMeasureEnd) {
+                   safeDuration = expectedMeasureEnd - currentAbsTick;
+                }
+                if (safeDuration < 1) safeDuration = 1;
+              }
+
+              partXml += `      <note>\n`;
+              if (isGrace) partXml += `        <grace/>\n`;
+              if (idx > 0 && !isGrace) partXml += `        <chord/>\n`; // OSMD doesn't typically mix chords with grace, but safe fallback
+              
+              partXml += `        <pitch>\n          ${midiToXmlPitch(note.pitch)}\n        </pitch>\n`;
+              
+              if (!isGrace) {
+                partXml += `        <duration>${safeDuration}</duration>\n`;
+              }
+              
+              partXml += `        <voice>${vId}</voice>\n`;
+              
+              // Prevent rendering tiny grace notes natively causing OSMD crashes
+              // if we need to explicitly declare type we could, but standard OSMD parses it fine.
+              partXml += `      </note>\n`;
+              
+              if (!isGrace && safeDuration > maxDur) maxDur = safeDuration;
+            });
+            
+            currentAbsTick += maxDur; // Grace notes don't advance the cursor!
           });
           
-          // Advance the tick cursor. 
-          // Real MusicXML handles polyphony with <backup>, but for now just advance by max duration found at this tick.
-          currentAbsTick += maxDur; 
+          // Pad the remainder of the measure out to exactly the measureEnd
+          if (currentAbsTick < expectedMeasureEnd) {
+             partXml += `      <note>\n`;
+             partXml += `        <rest/>\n`;
+             partXml += `        <duration>${expectedMeasureEnd - currentAbsTick}</duration>\n`;
+             partXml += `        <voice>${vId}</voice>\n`;
+             partXml += `      </note>\n`;
+          }
         });
-        
-        // Pad end of measure
-        const expectedMeasureEnd = measureAbsStart + ticks_per_measure;
-        if (currentAbsTick < expectedMeasureEnd) {
-          partXml += `      <note>\n`;
-          partXml += `        <rest/>\n`;
-          partXml += `        <duration>${expectedMeasureEnd - currentAbsTick}</duration>\n`;
-          partXml += `      </note>\n`;
-        }
       }
 
       partXml += `    </measure>\n`;

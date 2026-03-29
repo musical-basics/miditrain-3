@@ -916,7 +916,7 @@ export default function ETMEVisualizer() {
           className={`view-tab ${currentView.startsWith('phase3') ? 'active' : ''}`}
           style={{
             marginLeft: '8px', padding: '6px 12px', fontSize: '11px', fontWeight: 'bold',
-            background: currentView.startsWith('phase3') ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.03)',
+            backgroundColor: currentView.startsWith('phase3') ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.03)',
             color: currentView.startsWith('phase3') ? '#fff' : '#a0a0b0',
             border: currentView.startsWith('phase3') ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.1)',
             borderRadius: '6px', cursor: 'pointer', outline: 'none', appearance: 'none',
