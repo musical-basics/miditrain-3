@@ -739,6 +739,43 @@ export default function ETMEVisualizer() {
     }
   }, [data, noteHeight]);
 
+  // Notation Interaction
+  const handleNoteHover = useCallback((noteId, e) => {
+    if (!noteId || !data) {
+      setTooltip(null);
+      return;
+    }
+
+    // noteId format: "n-pitch-tick"
+    const parts = noteId.split('-');
+    const pitch = parseInt(parts[1]);
+    const tick = parseInt(parts[2]);
+
+    // Match back to original data.notes
+    // We search for a note with the same pitch and whose onset_ms matches the tick.
+    // Tick conversion in phase3b: quantized_onset = int(onset_ms / tick_duration_ms)
+    // Here we'll just find a note that is active at the approximate pitch/time.
+    const hit = data.notes.find(n => n.pitch === pitch && Math.abs(n.onset - (tick * 60000 / (120 * 4))) < 50); 
+    // Note: 120 bpm and 4 subdivision are defaults. 
+    // A more robust way is to just find the note that overlaps this pitch/tick in time.
+    
+    // Better: Since we have the ID, let's just use it to find the note in data.notes if we tagged them.
+    // If not tagged, we'll use a loose temporal match.
+    const finalHit = hit || data.notes.find(n => n.pitch === pitch && Math.abs(n.onset - (tick * 125)) < 250);
+
+    if (finalHit) {
+      const noteName = NOTE_NAMES[finalHit.pitch % 12] + (Math.floor(finalHit.pitch / 12) - 1);
+      setTooltip({
+        x: e.clientX + 14,
+        y: e.clientY + 14,
+        noteName, pitch: finalHit.pitch, velocity: finalHit.velocity,
+        onset: finalHit.onset, duration: finalHit.duration,
+        id_score: finalHit.id_score, voice_tag: finalHit.voice_tag,
+        hue: finalHit.hue, sat: finalHit.sat, lightness: finalHit.lightness, tonal_distance: finalHit.tonal_distance
+      });
+    }
+  }, [data]);
+
   // Keyboard
   const keyboardKeys = [];
   for (let p = PITCH_MAX; p >= PITCH_MIN; p--) {
@@ -1065,6 +1102,7 @@ export default function ETMEVisualizer() {
                 gridData={gridData} 
                 darkMode={isDarkMode} 
                 layoutMode={layoutMode}
+                onNoteHover={handleNoteHover}
               />
             </div>
           )}

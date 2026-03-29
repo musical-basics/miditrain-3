@@ -365,7 +365,7 @@ if __name__ == "__main__":
     valid_notes = [n for n in notes if 'quantized' in n]
 
     # ─── CLI PARSING ───
-    algorithm = 'krumhansl'
+    algorithm = 'temperley'
     if '--algo' in sys.argv:
         idx = sys.argv.index('--algo')
         if idx + 1 < len(sys.argv):

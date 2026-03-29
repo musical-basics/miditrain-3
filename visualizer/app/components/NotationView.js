@@ -6,7 +6,13 @@ import { VexFlowRenderer } from './dreamflow/VexFlowRenderer';
  * This component acts as a lightweight wrapper around the VexFlowRenderer,
  * providing the IntermediateScore data fetched from Phase 3C.
  */
-export default function NotationView({ phase3cData, darkMode = true, layoutMode = 'horizontal' }) {
+export default function NotationView({ 
+  phase3cData, 
+  darkMode = true, 
+  layoutMode = 'horizontal',
+  onNoteHover,
+  onNoteClick
+}) {
   if (!phase3cData || !phase3cData.measures) {
     return (
       <div style={{ 
@@ -47,6 +53,8 @@ export default function NotationView({ phase3cData, darkMode = true, layoutMode 
           musicFont="Bravura" 
           darkMode={darkMode} 
           paged={isPaged}
+          onNoteHover={(id, e) => onNoteHover?.(id, e)}
+          onNoteClick={(id, e) => onNoteClick?.(id, e)}
         />
       </div>
       

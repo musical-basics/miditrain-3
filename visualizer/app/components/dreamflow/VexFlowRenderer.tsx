@@ -39,6 +39,8 @@ import { vexKeyToMidi } from './midiMatcher'
 interface VexFlowRendererProps {
     score: IntermediateScore | null
     onRenderComplete?: (result: VexFlowRenderResult) => void
+    onNoteHover?: (noteId: string | null, e: MouseEvent) => void
+    onNoteClick?: (noteId: string, e: MouseEvent) => void
     darkMode?: boolean
     musicFont?: string
     paged?: boolean
@@ -49,6 +51,8 @@ interface VexFlowRendererProps {
 const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
     score,
     onRenderComplete,
+    onNoteHover,
+    onNoteClick,
     darkMode = false,
     musicFont = '',
     paged = false,
@@ -562,6 +566,20 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
                             p.style.transition = 'fill 0.1s, stroke 0.1s'
                         })
                     }
+
+                    // Interactive Events
+                    note.element.onmouseenter = (e: MouseEvent) => {
+                        if (note.element) note.element.style.filter = 'drop-shadow(0 0 4px rgba(255,255,255,0.8))'
+                        onNoteHover?.(note.id, e)
+                    }
+                    note.element.onmouseleave = (e: MouseEvent) => {
+                        if (note.element) note.element.style.filter = ''
+                        onNoteHover?.(null, e)
+                    }
+                    note.element.onclick = (e: MouseEvent) => {
+                        onNoteClick?.(note.id, e)
+                    }
+
                     const coreForX = note.element.querySelector('.vf-note-core') as HTMLElement
                     note.absoluteX = (coreForX || note.element).getBoundingClientRect().left - cLeft
                 }
