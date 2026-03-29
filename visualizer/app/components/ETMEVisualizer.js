@@ -96,6 +96,8 @@ export default function ETMEVisualizer() {
   const fileInputRef = useRef(null);
   const effectiveScaleRef = useRef(0.05);
   const logsEndRef = useRef(null);
+  const osmdContainerRef = useRef(null);
+  const osmdInstanceRef = useRef(null);
 
   const getBaseKey = useCallback(() => {
     if (midiFile && midiFile.startsWith('midis/')) return midiFile.split('/').pop().replace('.mid', '');
@@ -283,6 +285,37 @@ export default function ETMEVisualizer() {
     wrapper.addEventListener('scroll', onScroll);
     return () => wrapper.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Render OSMD Phase 3C Data
+  useEffect(() => {
+    let active = true;
+    if (currentView === 'phase3c' && phase3cData && osmdContainerRef.current) {
+      import('opensheetmusicdisplay').then((pkg) => {
+        if (!active) return;
+        const { OpenSheetMusicDisplay } = pkg;
+        
+        if (!osmdInstanceRef.current) {
+          osmdInstanceRef.current = new OpenSheetMusicDisplay(osmdContainerRef.current, {
+            autoResize: true,
+            drawTitle: false,
+          });
+        }
+        
+        import('../utils/musicXmlBuilder').then(({ buildMusicXml }) => {
+          if (!active) return;
+          try {
+            const xml = buildMusicXml(phase3cData);
+            osmdInstanceRef.current.load(xml).then(() => {
+              if (active) osmdInstanceRef.current.render();
+            }).catch(err => console.error("OSMD Load Error:", err));
+          } catch(e) {
+            console.error("XML Builder Error:", e);
+          }
+        });
+      }).catch(err => console.error("Failed to load OSMD:", err));
+    }
+    return () => { active = false; };
+  }, [currentView, phase3cData]);
 
   // Rendering
   const noteHeight = vZoom;
@@ -1009,8 +1042,8 @@ export default function ETMEVisualizer() {
             onMouseLeave={() => setTooltip(null)}
           />
           {currentView === 'phase3c' && (
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: '#0d0d12', zIndex: 10, padding: 20, overflow: 'auto', fontFamily: 'monospace', color: '#a0a0b0', fontSize: '12px', whiteSpace: 'pre-wrap' }}>
-              {phase3cData ? JSON.stringify(phase3cData, null, 2) : 'No Phase 3C data loaded. Run the Engine first.'}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: '#ffffff', zIndex: 10, padding: 20, overflow: 'auto' }}>
+              <div ref={osmdContainerRef} style={{ width: '100%', minHeight: '600px' }} />
             </div>
           )}
         </div>
