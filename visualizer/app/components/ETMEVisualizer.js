@@ -91,6 +91,7 @@ export default function ETMEVisualizer() {
     { label: 'Chunk 3 (Mm. 9-12)', value: 'chunk3' }
   ]);
   const [phase3bData, setPhase3bData] = useState(null);
+  const [phase3cData, setPhase3cData] = useState(null);
 
   const fileInputRef = useRef(null);
   const effectiveScaleRef = useRef(0.05);
@@ -251,6 +252,15 @@ export default function ETMEVisualizer() {
       .then(r => { if (!r.ok) return null; return r.json(); })
       .then(setPhase3bData)
       .catch(() => setPhase3bData(null));
+
+    const p3cFile = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
+      ? `phase3c_osmd_ready_${baseKey}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
+      : `phase3c_osmd_ready_${baseKey}_${angleMap}_${breakModel}.json`;
+
+    fetch(`/${p3cFile}?t=${Date.now()}_${refreshTrigger}`)
+      .then(r => { if (!r.ok) return null; return r.json(); })
+      .then(setPhase3cData)
+      .catch(() => setPhase3cData(null));
 
   }, [midiFile, angleMap, breakModel, jaccardThreshold, refreshTrigger, getBaseKey]);
 
@@ -831,8 +841,9 @@ export default function ETMEVisualizer() {
   ];
 
   const phase3Views = [
-    { id: 'phase3a', label: '3A — Macro', color: '#ffd640' },
-    { id: 'phase3b', label: '3B — Micro', color: '#8e24aa' }
+    { id: 'phase3a', label: '3A — Macro-Meter', color: '#ffd640' },
+    { id: 'phase3b', label: '3B — Micro-Quantize', color: '#8e24aa' },
+    { id: 'phase3c', label: '3C — Notation Map', color: '#4caf50' }
   ];
 
   return (
@@ -862,20 +873,32 @@ export default function ETMEVisualizer() {
           </button>
         ))}
 
-        <div className="phase3-group" style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '2px 4px', marginLeft: '8px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a0a0b0', marginLeft: '6px', marginRight: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phase 3:</span>
+        <select
+          value={currentView.startsWith('phase3') ? currentView : 'phase3_placeholder'}
+          onChange={e => {
+            if (e.target.value !== 'phase3_placeholder') {
+              setCurrentView(e.target.value);
+            }
+          }}
+          className={`view-tab ${currentView.startsWith('phase3') ? 'active' : ''}`}
+          style={{
+            marginLeft: '8px', padding: '6px 12px', fontSize: '11px', fontWeight: 'bold',
+            background: currentView.startsWith('phase3') ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.03)',
+            color: currentView.startsWith('phase3') ? '#fff' : '#a0a0b0',
+            border: currentView.startsWith('phase3') ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '6px', cursor: 'pointer', outline: 'none', appearance: 'none',
+            backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+            backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', backgroundSize: '12px',
+            paddingRight: '24px'
+          }}
+        >
+          <option value="phase3_placeholder" disabled>PHASE 3 OPTIONS...</option>
           {phase3Views.map(v => (
-            <button
-              key={v.id}
-              className={`view-tab ${currentView === v.id ? 'active' : ''}`}
-              style={{ margin: '2px', padding: '6px 10px' }}
-              onClick={() => setCurrentView(v.id)}
-            >
-              <span className="dot" style={{ background: v.color }} />
+            <option key={v.id} value={v.id} style={{ background: '#1a1a2e', color: '#e0e0e0' }}>
               {v.label}
-            </button>
+            </option>
           ))}
-        </div>
+        </select>
         <button 
           onClick={runEngine} 
           style={{
@@ -977,7 +1000,7 @@ export default function ETMEVisualizer() {
       </div>
 
       {/* PIANO ROLL */}
-      <div className="roll-container">
+      <div className="roll-container" style={{ position: 'relative' }}>
         <div className="keyboard" ref={keyboardRef}>{keyboardKeys}</div>
         <div className="canvas-wrapper" ref={wrapperRef}>
           <canvas
@@ -985,6 +1008,11 @@ export default function ETMEVisualizer() {
             onMouseMove={handleMouseMove}
             onMouseLeave={() => setTooltip(null)}
           />
+          {currentView === 'phase3c' && (
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: '#0d0d12', zIndex: 10, padding: 20, overflow: 'auto', fontFamily: 'monospace', color: '#a0a0b0', fontSize: '12px', whiteSpace: 'pre-wrap' }}>
+              {phase3cData ? JSON.stringify(phase3cData, null, 2) : 'No Phase 3C data loaded. Run the Engine first.'}
+            </div>
+          )}
         </div>
       </div>
 
