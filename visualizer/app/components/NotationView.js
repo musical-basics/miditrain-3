@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Renderer, Stave, StaveNote, Accidental, Voice, Formatter, StaveConnector } from 'dreamflow';
+import { Renderer, Stave, StaveNote, Accidental, Voice, LinearFormatter, StaveConnector } from 'dreamflow';
 
 function midiToVexPitches(midi) {
   const notes = ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'];
@@ -196,7 +196,7 @@ export default function NotationView({ phase3cData, gridData }) {
         const bassVoice = new Voice({ num_beats: num, beat_value: den }).setStrict(false);
         bassVoice.addTickables(bassNotes);
 
-        const formatter = new Formatter().joinVoices([trebleVoice, bassVoice]);
+        const formatter = new LinearFormatter(30); // 30 pixels per quarter note, basically
         const formatWidth = mWidth - (isFirst ? 80 : 30);
         formatter.format([trebleVoice, bassVoice], formatWidth);
 
