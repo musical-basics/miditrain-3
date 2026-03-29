@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
+import { Sun, Moon } from 'lucide-react';
 import NotationView from './NotationView';
 
 // ===== CONSTANTS =====
@@ -79,6 +80,7 @@ export default function ETMEVisualizer() {
   const [hZoom, setHZoom] = useState(10);
   const [vZoom, setVZoom] = useState(10);
   const [tooltip, setTooltip] = useState(null);
+  const [isDarkMode, setIsDarkMode] = useState(true);
 
   const [isEngineRunning, setIsEngineRunning] = useState(false);
   const [isEngineDone, setIsEngineDone] = useState(false);
@@ -904,11 +906,27 @@ export default function ETMEVisualizer() {
           onClick={runEngine} 
           style={{
             marginLeft: 'auto', marginRight: '6px', padding: '4px 12px', fontSize: '11px',
-            background: '#2e7d32', color: '#fff', border: '1px solid #1b5e20',
-            borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
+            background: isDarkMode ? '#2e7d32' : '#43a047', color: '#fff', border: `1px solid ${isDarkMode ? '#1b5e20' : '#2e7d32'}`,
+            borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold',
+            display: 'flex', alignItems: 'center', gap: '4px'
           }}
         >
           ▶ Run Engine
+        </button>
+        <button 
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          style={{
+            marginRight: '12px', padding: '4px 8px',
+            background: isDarkMode ? '#1a1a2e' : '#fff',
+            color: isDarkMode ? '#fff' : '#000',
+            border: `1px solid ${isDarkMode ? '#333' : '#ddd'}`,
+            borderRadius: '4px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+          title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
         </button>
         <div style={{ position: 'relative' }}>
           <button 
@@ -1010,8 +1028,8 @@ export default function ETMEVisualizer() {
             onMouseLeave={() => setTooltip(null)}
           />
           {currentView === 'phase3c' && (
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: '#ffffff', zIndex: 10 }}>
-              <NotationView phase3cData={phase3cData} gridData={gridData} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: isDarkMode ? '#0d0d12' : '#f8f9fa', zIndex: 10 }}>
+              <NotationView phase3cData={phase3cData} gridData={gridData} darkMode={isDarkMode} />
             </div>
           )}
         </div>

@@ -6,7 +6,7 @@ import { VexFlowRenderer } from './dreamflow/VexFlowRenderer';
  * This component acts as a lightweight wrapper around the VexFlowRenderer,
  * providing the IntermediateScore data fetched from Phase 3C.
  */
-export default function NotationView({ phase3cData }) {
+export default function NotationView({ phase3cData, darkMode = true }) {
   if (!phase3cData || !phase3cData.measures) {
     return (
       <div style={{ 
@@ -14,9 +14,10 @@ export default function NotationView({ phase3cData }) {
         alignItems: 'center', 
         justifyContent: 'center', 
         height: '100%', 
-        color: '#666',
+        color: darkMode ? '#666' : '#999',
         fontSize: '14px',
-        fontFamily: 'Inter, sans-serif'
+        fontFamily: 'Inter, sans-serif',
+        background: darkMode ? '#0d0d12' : '#f8f9fa'
       }}>
         No notation data available. Please run the ETME Engine.
       </div>
@@ -31,17 +32,18 @@ export default function NotationView({ phase3cData }) {
         height: '100%', 
         overflowX: 'auto', 
         overflowY: 'hidden',
-        background: '#0d0d12', // Match visualizer dark theme
+        background: darkMode ? '#0d0d12' : '#f8f9fa', 
         padding: '20px',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        transition: 'background 0.3s ease'
       }} 
     >
       <div style={{ flex: 1, minWidth: 'fit-content' }}>
         <VexFlowRenderer 
           score={phase3cData} 
           musicFont="Bravura" 
-          darkMode={true} 
+          darkMode={darkMode} 
         />
       </div>
       
@@ -50,19 +52,19 @@ export default function NotationView({ phase3cData }) {
           height: 8px;
         }
         .notation-view-root::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.05);
+          background: ${darkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'};
         }
         .notation-view-root::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.2);
+          background: ${darkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'};
           border-radius: 4px;
         }
         .notation-view-root::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.3);
+          background: ${darkMode ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)'};
         }
         
         /* Ensure VexFlow SVG scales properly within the container */
         .vexflow-container svg {
-          filter: drop-shadow(0 0 2px rgba(255,255,255,0.05));
+          filter: ${darkMode ? 'none' : 'none'}; /* We handle colors via setStyle, but filter can be used for extra contrast if needed */
         }
       `}</style>
     </div>
