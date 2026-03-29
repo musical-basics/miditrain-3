@@ -406,18 +406,15 @@ class MacroMeterEstimator:
         print(f"  📄  {self.json_path.split('/')[-1]}")
         print(f"{sep}")
 
-        # ── Voice 4 Bass onsets ──────────────────────────────────────────
-        bass_notes = sorted(
-            [n for n in self.notes if n["voice_tag"] == "Voice 4"],
-            key=lambda n: n["onset"],
-        )
-        bass_onsets = [n["onset"] for n in bass_notes]
+        # ── All onsets ──────────────────────────────────────────
+        all_onsets = sorted([n["onset"] for n in self.notes])
 
-        if len(bass_onsets) < 3:
-            print("  ⚠️  Not enough Bass notes to establish a pulse.")
+        if len(all_onsets) < 3:
+            print("  ⚠️  Not enough notes to establish a pulse.")
             return None
 
-        sub_tactus_ms, tactus_ms, subdivision = self._estimate_tactus(bass_onsets)
+        # Feed all onsets to the tactus estimator so it can detect 16th notes/triplets
+        sub_tactus_ms, tactus_ms, subdivision = self._estimate_tactus(all_onsets)
         if not tactus_ms:
             print("  ⚠️  Tactus estimation failed.")
             return None

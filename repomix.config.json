@@ -18,6 +18,7 @@
       "*.pth",
       "visualizer/public/etme_*.json",
       "visualizer/public/phase3_grid_*.json",
+      "visualizer/public/phase3b_*.json",
       "visualizer/public/test*.json",
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml",

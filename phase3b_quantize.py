@@ -115,7 +115,8 @@ def main(etme_path, grid_path):
         else:
             first_in_cluster_onset = current_cluster[0]['onset']
             # If within 45ms of the FIRST note of the cluster (or previous note? PRD says: "within <= 45ms of the previous note's onset")
-            if n['onset'] - current_cluster[-1]['onset'] <= 45:
+            # FIX: Compare against the FIRST note [0] of the cluster to prevent unbounded growth
+            if n['onset'] - current_cluster[0]['onset'] <= 45:
                 current_cluster.append(n)
             else:
                 clusters.append(current_cluster)
@@ -208,6 +209,28 @@ def main(etme_path, grid_path):
         # clean up temps
         n.pop('_snapped_cluster_tick', None)
         n.pop('_cluster_id', None)
+
+    # Step 4.5: Voice Monophony Enforcement
+    # Standard notation requires monophonic voice lines. Truncate overlapping pedal durations.
+    for v_tag in voices:
+        v_notes = [n for n in notes if n.get('voice_tag') == v_tag]
+        # Sort strictly by quantized start tick
+        v_notes.sort(key=lambda x: x['quantized']['abs_tick_start'])
+        
+        for i in range(len(v_notes) - 1):
+            curr_n = v_notes[i]
+            
+            # Find the next note that strictly starts AFTER this one
+            next_start = None
+            for j in range(i + 1, len(v_notes)):
+                if v_notes[j]['quantized']['abs_tick_start'] > curr_n['quantized']['abs_tick_start']:
+                    next_start = v_notes[j]['quantized']['abs_tick_start']
+                    break
+            
+            # Truncate duration to prevent visual and logical overlap
+            if next_start is not None and curr_n['quantized']['abs_tick_end'] > next_start:
+                curr_n['quantized']['abs_tick_end'] = next_start
+                curr_n['quantized']['duration_ticks'] = next_start - curr_n['quantized']['abs_tick_start']
 
     # Step 5: Save JSON
     chunk_name = etme_path.split('etme_')[-1].split('_')[0] 
