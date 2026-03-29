@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
+import NotationView from './NotationView';
 
 // ===== CONSTANTS =====
 const PITCH_MIN = 21;
@@ -96,8 +97,6 @@ export default function ETMEVisualizer() {
   const fileInputRef = useRef(null);
   const effectiveScaleRef = useRef(0.05);
   const logsEndRef = useRef(null);
-  const osmdContainerRef = useRef(null);
-  const osmdInstanceRef = useRef(null);
 
   const getBaseKey = useCallback(() => {
     if (midiFile && midiFile.startsWith('midis/')) return midiFile.split('/').pop().replace('.mid', '');
@@ -285,52 +284,6 @@ export default function ETMEVisualizer() {
     wrapper.addEventListener('scroll', onScroll);
     return () => wrapper.removeEventListener('scroll', onScroll);
   }, []);
-
-  // Render OSMD Phase 3C Data
-  useEffect(() => {
-    let active = true;
-
-    if (currentView === 'phase3c' && phase3cData && osmdContainerRef.current) {
-      // Always destroy and recreate: the container div is conditionally mounted,
-      // so any cached instance points to a detached DOM node after a tab switch.
-      if (osmdInstanceRef.current) {
-        try { osmdInstanceRef.current.clear(); } catch (_) {}
-        osmdInstanceRef.current = null;
-      }
-
-      import('opensheetmusicdisplay').then((pkg) => {
-        if (!active || !osmdContainerRef.current) return;
-        const { OpenSheetMusicDisplay } = pkg;
-
-        osmdInstanceRef.current = new OpenSheetMusicDisplay(osmdContainerRef.current, {
-          autoResize: true,
-          drawTitle: false,
-        });
-
-        import('../utils/musicXmlBuilder').then(({ buildMusicXml }) => {
-          if (!active || !osmdInstanceRef.current) return;
-          try {
-            const xml = buildMusicXml(phase3cData);
-            osmdInstanceRef.current.load(xml).then(() => {
-              if (active && osmdInstanceRef.current) osmdInstanceRef.current.render();
-            }).catch(err => console.error("OSMD Load Error:", err));
-          } catch(e) {
-            console.error("XML Builder Error:", e);
-          }
-        });
-      }).catch(err => console.error("Failed to load OSMD:", err));
-    }
-
-    return () => {
-      active = false;
-      // On cleanup (tab switch away), destroy the instance so it's not reused
-      // against a soon-to-be-detached container.
-      if (osmdInstanceRef.current) {
-        try { osmdInstanceRef.current.clear(); } catch (_) {}
-        osmdInstanceRef.current = null;
-      }
-    };
-  }, [currentView, phase3cData]);
 
   // Rendering
   const noteHeight = vZoom;
@@ -1057,8 +1010,8 @@ export default function ETMEVisualizer() {
             onMouseLeave={() => setTooltip(null)}
           />
           {currentView === 'phase3c' && (
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: '#ffffff', zIndex: 10, padding: 20, overflow: 'auto' }}>
-              <div ref={osmdContainerRef} style={{ width: '100%', minHeight: '600px' }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: '#ffffff', zIndex: 10 }}>
+              <NotationView phase3cData={phase3cData} gridData={gridData} />
             </div>
           )}
         </div>

@@ -8,8 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "dreamflow": "file:../../../UltimatePianist Repos/dreamflow",
     "next": "16.2.1",
-    "opensheetmusicdisplay": "^1.9.7",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   }
