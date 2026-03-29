@@ -413,6 +413,13 @@ class MacroMeterEstimator:
             print("  ⚠️  Not enough notes to establish a pulse.")
             return None
 
+        # Re-build bass_onsets since Pass 2 bass-coincidence veto needs them
+        bass_notes = sorted(
+            [n for n in self.notes if n["voice_tag"] == "Voice 4"],
+            key=lambda n: n["onset"],
+        )
+        bass_onsets = [n["onset"] for n in bass_notes]
+
         # Feed all onsets to the tactus estimator so it can detect 16th notes/triplets
         sub_tactus_ms, tactus_ms, subdivision = self._estimate_tactus(all_onsets)
         if not tactus_ms:
