@@ -81,6 +81,7 @@ export default function ETMEVisualizer() {
   const [vZoom, setVZoom] = useState(10);
   const [tooltip, setTooltip] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [layoutMode, setLayoutMode] = useState('horizontal');
 
   const [isEngineRunning, setIsEngineRunning] = useState(false);
   const [isEngineDone, setIsEngineDone] = useState(false);
@@ -914,6 +915,20 @@ export default function ETMEVisualizer() {
           ▶ Run Engine
         </button>
         <button 
+          onClick={() => setLayoutMode(layoutMode === 'horizontal' ? 'paged' : 'horizontal')}
+          style={{
+            marginRight: '12px', padding: '4px 8px', fontSize: '11px',
+            background: isDarkMode ? '#1a1a2e' : '#fff',
+            color: isDarkMode ? '#fff' : '#000',
+            border: `1px solid ${isDarkMode ? '#333' : '#ddd'}`,
+            borderRadius: '4px', cursor: 'pointer',
+            fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px'
+          }}
+          title="Toggle Layout (Horizontal / Paged)"
+        >
+          {layoutMode === 'horizontal' ? '↔️' : '📑'} {layoutMode === 'horizontal' ? 'Horizontal' : 'Paged'}
+        </button>
+        <button 
           onClick={() => setIsDarkMode(!isDarkMode)}
           style={{
             marginRight: '12px', padding: '4px 8px',
@@ -1029,7 +1044,12 @@ export default function ETMEVisualizer() {
           />
           {currentView === 'phase3c' && (
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: isDarkMode ? '#0d0d12' : '#f8f9fa', zIndex: 10 }}>
-              <NotationView phase3cData={phase3cData} gridData={gridData} darkMode={isDarkMode} />
+              <NotationView 
+                phase3cData={phase3cData} 
+                gridData={gridData} 
+                darkMode={isDarkMode} 
+                layoutMode={layoutMode}
+              />
             </div>
           )}
         </div>

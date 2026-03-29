@@ -29,7 +29,8 @@
       "AGENTS.md",
       "_backup_files/**",
       "STS_bootstrapper.py",
-      "Screenshot*"
+      "Screenshot*",
+      "DreamFlow_MIDI_Format_Guide/**"
     ]
   }
 }

@@ -41,6 +41,7 @@ interface VexFlowRendererProps {
     onRenderComplete?: (result: VexFlowRenderResult) => void
     darkMode?: boolean
     musicFont?: string
+    paged?: boolean
 }
 
 // ─── Component ─────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
     onRenderComplete,
     darkMode = false,
     musicFont = '',
+    paged = false,
 }) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const rendererRef = useRef<Renderer | null>(null)
@@ -82,11 +84,16 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
         setIsRendered(false)
 
         const measures = score.measures
-        const totalWidth = LEFT_MARGIN + (measures.length * STAVE_WIDTH) + 40
+        const MAX_ROW_WIDTH = 1200
+        const measuresPerRow = paged ? Math.max(1, Math.floor((MAX_ROW_WIDTH - LEFT_MARGIN) / STAVE_WIDTH)) : measures.length
+        const rowCount = Math.ceil(measures.length / measuresPerRow)
+        
+        const totalWidth = paged ? MAX_ROW_WIDTH : (LEFT_MARGIN + (measures.length * STAVE_WIDTH) + 40)
+        const totalHeight = (rowCount * SYSTEM_HEIGHT) + 40
 
         // Create SVG renderer
         const renderer = new Renderer(containerRef.current, Renderer.Backends.SVG)
-        renderer.resize(totalWidth, SYSTEM_HEIGHT)
+        renderer.resize(totalWidth, totalHeight)
         rendererRef.current = renderer
 
         const context = renderer.getContext() as RenderContext
@@ -130,7 +137,12 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
         for (let mIdx = 0; mIdx < measures.length; mIdx++) {
             const measure = measures[mIdx]
             const measureNumber = measure.measureNumber
-            const x = LEFT_MARGIN + (mIdx * STAVE_WIDTH)
+            
+            const row = paged ? Math.floor(mIdx / measuresPerRow) : 0
+            const col = paged ? (mIdx % measuresPerRow) : mIdx
+            
+            const x = LEFT_MARGIN + (col * STAVE_WIDTH)
+            const yOffset = row * SYSTEM_HEIGHT
 
             // Update running state
             if (measure.keySignature) currentKeySig = measure.keySignature
@@ -138,8 +150,8 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
             if (measure.timeSignatureDenominator) currentTimeSigDen = measure.timeSignatureDenominator
 
             // ── Create staves ──
-            const trebleStave = new Stave(x, STAVE_Y_TREBLE, STAVE_WIDTH)
-            const bassStave = new Stave(x, STAVE_Y_TREBLE + STAVE_SPACING, STAVE_WIDTH)
+            const trebleStave = new Stave(x, STAVE_Y_TREBLE + yOffset, STAVE_WIDTH)
+            const bassStave = new Stave(x, STAVE_Y_TREBLE + STAVE_SPACING + yOffset, STAVE_WIDTH)
 
             // Clefs
             for (const staff of measure.staves) {
@@ -151,7 +163,7 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
                 }
             }
 
-            if (mIdx === 0) {
+            if (mIdx === 0 || (paged && col === 0)) {
                 trebleStave.addClef(currentTrebleClef)
                 bassStave.addClef(currentBassClef)
 
@@ -174,7 +186,7 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
                     }
                 }
 
-                if (measure.timeSignatureNumerator) {
+                if (mIdx === 0 || (paged && col === 0) || measure.timeSignatureNumerator) {
                     trebleStave.addTimeSignature(`${currentTimeSigNum}/${currentTimeSigDen}`)
                     bassStave.addTimeSignature(`${currentTimeSigNum}/${currentTimeSigDen}`)
                 }
@@ -183,8 +195,8 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
             trebleStave.setContext(context).draw()
             bassStave.setContext(context).draw()
 
-            // Brace + line connector on first measure
-            if (mIdx === 0) {
+            // Brace + line connector on first measure or start of row
+            if (mIdx === 0 || (paged && col === 0)) {
                 new StaveConnector(trebleStave, bassStave).setType('brace').setContext(context).draw()
                 new StaveConnector(trebleStave, bassStave).setType('singleLeft').setContext(context).draw()
             }
@@ -560,7 +572,8 @@ const VexFlowRendererComponent: React.FC<VexFlowRendererProps> = ({
             if (onRenderComplete) {
                 const systemYMap = {
                     top: STAVE_Y_TREBLE - 20,
-                    height: SYSTEM_HEIGHT,
+                    height: paged ? totalHeight : SYSTEM_HEIGHT,
+                    rowCount: paged ? rowCount : 1
                 }
                 onRenderComplete({
                     measureXMap,

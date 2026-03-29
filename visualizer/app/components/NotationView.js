@@ -6,7 +6,7 @@ import { VexFlowRenderer } from './dreamflow/VexFlowRenderer';
  * This component acts as a lightweight wrapper around the VexFlowRenderer,
  * providing the IntermediateScore data fetched from Phase 3C.
  */
-export default function NotationView({ phase3cData, darkMode = true }) {
+export default function NotationView({ phase3cData, darkMode = true, layoutMode = 'horizontal' }) {
   if (!phase3cData || !phase3cData.measures) {
     return (
       <div style={{ 
@@ -24,14 +24,16 @@ export default function NotationView({ phase3cData, darkMode = true }) {
     );
   }
 
+  const isPaged = layoutMode === 'paged';
+
   return (
     <div 
       className="notation-view-root"
       style={{ 
         width: '100%', 
         height: '100%', 
-        overflowX: 'auto', 
-        overflowY: 'hidden',
+        overflowX: isPaged ? 'hidden' : 'auto', 
+        overflowY: isPaged ? 'auto' : 'hidden',
         background: darkMode ? '#0d0d12' : '#f8f9fa', 
         padding: '20px',
         display: 'flex',
@@ -39,16 +41,18 @@ export default function NotationView({ phase3cData, darkMode = true }) {
         transition: 'background 0.3s ease'
       }} 
     >
-      <div style={{ flex: 1, minWidth: 'fit-content' }}>
+      <div style={{ flex: 1, minWidth: isPaged ? '100%' : 'fit-content', display: 'flex', justifyContent: isPaged ? 'center' : 'flex-start' }}>
         <VexFlowRenderer 
           score={phase3cData} 
           musicFont="Bravura" 
           darkMode={darkMode} 
+          paged={isPaged}
         />
       </div>
       
       <style jsx global>{`
         .notation-view-root::-webkit-scrollbar {
+          width: 8px;
           height: 8px;
         }
         .notation-view-root::-webkit-scrollbar-track {
@@ -60,11 +64,6 @@ export default function NotationView({ phase3cData, darkMode = true }) {
         }
         .notation-view-root::-webkit-scrollbar-thumb:hover {
           background: ${darkMode ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)'};
-        }
-        
-        /* Ensure VexFlow SVG scales properly within the container */
-        .vexflow-container svg {
-          filter: ${darkMode ? 'none' : 'none'}; /* We handle colors via setStyle, but filter can be used for extra contrast if needed */
         }
       `}</style>
     </div>
