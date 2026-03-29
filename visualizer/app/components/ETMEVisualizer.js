@@ -82,6 +82,7 @@ export default function ETMEVisualizer() {
   const [tooltip, setTooltip] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [layoutMode, setLayoutMode] = useState('horizontal');
+  const [keyAlgorithm, setKeyAlgorithm] = useState('temperley');
 
   const [isEngineRunning, setIsEngineRunning] = useState(false);
   const [isEngineDone, setIsEngineDone] = useState(false);
@@ -195,7 +196,7 @@ export default function ETMEVisualizer() {
     const p3cTarget = (breakModel === 'hybrid' || breakModel === 'hybrid_split')
       ? `visualizer/public/phase3b_quantized_${baseKey}_${angleMap}_${breakModel}_${jaccardThreshold}.json`
       : `visualizer/public/phase3b_quantized_${baseKey}_${angleMap}_${breakModel}.json`;
-    const s4 = await runScript('phase3c_notation.py', [p3cTarget, gridTarget]);
+    const s4 = await runScript('phase3c_notation.py', [p3cTarget, gridTarget, '--algo', keyAlgorithm]);
     if (!s4) {
       setEngineLogs(prev => [...prev, '\n❌ Pipeline aborted. Please check the logs above.']);
       setIsEngineDone(true);
@@ -903,10 +904,25 @@ export default function ETMEVisualizer() {
             </option>
           ))}
         </select>
+        <select
+          value={keyAlgorithm}
+          onChange={e => setKeyAlgorithm(e.target.value)}
+          style={{
+            marginLeft: 'auto', marginRight: '6px', padding: '4px 8px', fontSize: '11px',
+            background: isDarkMode ? '#1a1a2e' : '#fff',
+            color: isDarkMode ? '#e0e0e0' : '#000',
+            border: `1px solid ${isDarkMode ? '#333' : '#ddd'}`,
+            borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
+          }}
+          title="Key Detection Algorithm"
+        >
+          <option value="krumhansl">Krumhansl-Schmuckler</option>
+          <option value="temperley">Temperley (CBMS)</option>
+        </select>
         <button 
           onClick={runEngine} 
           style={{
-            marginLeft: 'auto', marginRight: '6px', padding: '4px 12px', fontSize: '11px',
+            marginRight: '6px', padding: '4px 12px', fontSize: '11px',
             background: isDarkMode ? '#2e7d32' : '#43a047', color: '#fff', border: `1px solid ${isDarkMode ? '#1b5e20' : '#2e7d32'}`,
             borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold',
             display: 'flex', alignItems: 'center', gap: '4px'

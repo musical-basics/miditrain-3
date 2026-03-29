@@ -5,14 +5,20 @@ import math
 
 # ─── KEY SIGNATURE & ENHARMONIC SPELLING ENGINE ──────────────────
 
-def krumhansl_schmuckler(pitch_classes):
+def detect_key(pitch_classes, algorithm='krumhansl'):
     """
-    Detects Key Signature using Krumhansl-Schmuckler Pearson correlation 
-    against standard major and minor cognitive profiles.
+    Detects Key Signature using cognitive Pearson correlation.
+    Supports Krumhansl-Schmuckler and Temperley (CBMS) profiles.
     Returns: (best_key_string, accidental_count)
     """
-    major_profile = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
-    minor_profile = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
+    if algorithm == 'temperley':
+        # Temperley (1999) "Simple" profiles (aka CBMS)
+        major_profile = [5.0, 2.0, 3.5, 2.0, 4.5, 4.0, 2.0, 4.5, 2.0, 3.5, 1.5, 4.0]
+        minor_profile = [5.0, 2.0, 3.5, 4.5, 2.0, 4.0, 2.0, 4.5, 3.5, 2.0, 1.5, 4.0]
+    else:
+        # Standard Krumhansl-Schmuckler profiles
+        major_profile = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
+        minor_profile = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
     
     total = sum(pitch_classes)
     if total == 0: return 'C', 0
@@ -117,9 +123,9 @@ def get_key_defaults(acc_count):
             state[flat_idx[i]] = 'b'
     return state
 
-def analyze_chunk_key(notes):
+def analyze_chunk_key(notes, algorithm='krumhansl'):
     """
-    Builds a velocity and duration weighted frequency histogram to pass to KS profile.
+    Builds a velocity and duration weighted frequency histogram to pass to cognitive profile.
     """
     pitch_classes = [0.0] * 12
     for n in notes:
@@ -127,7 +133,7 @@ def analyze_chunk_key(notes):
         dur = n.get('quantized', {}).get('duration_ticks', 1)
         pitch_classes[n['pitch'] % 12] += (vel * dur)
     
-    return krumhansl_schmuckler(pitch_classes)
+    return detect_key(pitch_classes, algorithm)
 
 
 # ─── VEXFLOW FORMATTER ───────────────────────────────────────────
@@ -146,13 +152,13 @@ def get_vex_duration(dur_ticks, ticks_per_measure, beats_per_measure):
     closest = min(durs, key=lambda d: abs(ratio - d[0]))
     return closest[1], closest[2]
 
-def build_dreamflow_score(notes, ticks_per_measure, beats_per_measure, time_sig_num, time_sig_den):
+def build_dreamflow_score(notes, ticks_per_measure, beats_per_measure, time_sig_num, time_sig_den, algorithm='krumhansl'):
     """
     Transforms flat list of quantized notes into an IntermediateScore JSON structure.
     Integrates dynamic key signature derivation and chronologically filtered enharmonic spelling.
     """
     # 1. Macro Analysis: Calculate Key Signature to anchor the chunk matrix
-    best_key, acc_count = analyze_chunk_key(notes)
+    best_key, acc_count = analyze_chunk_key(notes, algorithm)
     
     # 2. Extract Enharmonic Spelling Tables
     key_spelling_map = get_key_spellings(acc_count)
@@ -357,8 +363,19 @@ if __name__ == "__main__":
 
     notes = data.get('notes', [])
     valid_notes = [n for n in notes if 'quantized' in n]
-    
-    score = build_dreamflow_score(valid_notes, ticks_per_measure, beats_per_measure, beats_per_measure, denominator)
+
+    # ─── CLI PARSING ───
+    algorithm = 'krumhansl'
+    if '--algo' in sys.argv:
+        idx = sys.argv.index('--algo')
+        if idx + 1 < len(sys.argv):
+            algorithm = sys.argv[idx + 1].lower()
+    elif '-a' in sys.argv:
+        idx = sys.argv.index('-a')
+        if idx + 1 < len(sys.argv):
+            algorithm = sys.argv[idx + 1].lower()
+
+    score = build_dreamflow_score(valid_notes, ticks_per_measure, beats_per_measure, beats_per_measure, denominator, algorithm)
     
     basename = os.path.basename(p3b_path)
     out_name = basename.replace('phase3b_quantized_', 'phase3c_osmd_ready_')
@@ -367,4 +384,4 @@ if __name__ == "__main__":
     with open(out_path, 'w') as f:
         json.dump(score, f, indent=2)
         
-    print(f"Phase 3C DreamFlow mapping complete! Detected Key: {score['measures'][0].get('keySignature', 'C')}. Wrote to {out_path}")
+    print(f"Phase 3C DreamFlow mapping complete! Detected Key: {score['measures'][0].get('keySignature', 'C')} (Algorithm: {algorithm}). Wrote to {out_path}")
