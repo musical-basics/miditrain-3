@@ -152,7 +152,7 @@ class MacroMeterEstimator:
 
         Phase 3 Coherent Merge:
         Merges Phase 1 (Harmonic Spikes) with Phase 2 (Thermodynamic Voice Threading).
-        A Phase 1 spike's structural weight is amplified by the mass of Phase 2 notes
+        A Phase 1 spike's structural weight is amplified by the mass of Phase 2 notes 
         (especially Voice 4 Bass and Voice 1 Melody) that strike simultaneously.
         This powerfully filters out passing harmonic chords and amplifies true downbeats.
         """
@@ -165,14 +165,14 @@ class MacroMeterEstimator:
             idx = int(t / BIN_MS)
             if 0 <= idx < n_bins:
                 weight = 1.0  # Base weight for a harmonic spike
-
+                
                 # Phase 2 Merge: Find coincident structural notes
                 for n in self.notes:
                     if abs(n["onset"] - t) <= 50:
                         # Calculate mass: velocity (0.0-1.0) * duration factor
                         dur_factor = max(0.5, min(n["duration"] / 1000.0, 2.0))
                         mass = (n["velocity"] / 127.0) * dur_factor
-
+                        
                         if n["voice_tag"] == "Voice 4":
                             weight += mass * 3.0  # Bass is the strongest measure anchor
                         elif n["voice_tag"] == "Voice 1":
@@ -180,7 +180,9 @@ class MacroMeterEstimator:
                         else:
                             weight += mass * 0.5  # Inner voices contribute lightly
 
-                density[idx] += weight
+                # The Coherent Merge Fix: Square the accumulated structural weight
+                # to mathematically crush bins lacking heavy bass or melody anchors.
+                density[idx] += weight ** 2
 
         # Autocorrelate: lags from tactus_ms up to half the total duration
         min_lag_bins = max(1, int(tactus_ms / BIN_MS))
@@ -213,8 +215,9 @@ class MacroMeterEstimator:
         if not peaks:
             best_lag_ms = max(autocorr, key=lambda x: x[1])[0]
         else:
-            # Pick the SMALLEST lag peak that has >= 50% of the global maximum
-            significant = [(lag, s) for lag, s in peaks if s >= max_score * 0.5]
+            # Pick the SMALLEST lag peak that has >= 75% of the global maximum
+            # (Previously 50%, which incorrectly allowed the 250ms 70% passing-chord noise to leak through)
+            significant = [(lag, s) for lag, s in peaks if s >= max_score * 0.75]
             if significant:
                 best_lag_ms = min(significant, key=lambda x: x[0])[0]
             else:
