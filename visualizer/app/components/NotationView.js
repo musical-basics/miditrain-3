@@ -30,10 +30,9 @@ export default function NotationView({ phase3cData, gridData }) {
     const { measures, ticks_per_measure } = phase3cData;
     const ticksPerWholeNote = ticks_per_measure / measureValuesInWholeNotes;
 
-    // Zoom-level pixel density (we can just compute how wide a single tick is)
-    // Assuming standard 4/4 measure at 320 ticks could be 320 pixels -> 1 px/tick. 
-    // Let's define pixelsPerTick
-    const pixelsPerTick = 2.0; 
+    // A standard quarter note should be approximately 80 pixels wide
+    const ticksPerQuarter = ticksPerWholeNote / 4;
+    const pixelsPerTick = 80 / ticksPerQuarter; 
 
     function getVexDuration(durTicks) {
       if (durTicks <= 0) durTicks = 1;
